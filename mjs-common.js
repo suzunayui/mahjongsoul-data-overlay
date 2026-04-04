@@ -1,5 +1,7 @@
 import path from "node:path";
 import process from "node:process";
+import fs from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 export const userDataDir = path.resolve(".playwright-profile");
 export const targetUrl = process.env.MJS_URL || "https://game.mahjongsoul.com/";
@@ -546,91 +548,108 @@ export async function extractProfileData(page) {
 }
 
 export async function installHooks(page) {
-  await page.addInitScript(() => {
-    const rankAssetPattern =
-      /\/(?:sanma|sima)_(?:fish|queshi|quejie|quehao|quesheng|huntian)\.png/i;
+  const moduleDir =
+    typeof __dirname === "string"
+      ? __dirname
+      : path.dirname(fileURLToPath(import.meta.url));
+  const helperScriptPath = process.pkg
+    ? path.join(path.dirname(process.execPath), "page-helpers.js")
+    : path.join(moduleDir, "page-helpers.js");
 
-    if (window.__mjsHooksInstalled) {
-      return;
-    }
+  const helperScript = await fs.readFile(helperScriptPath, "utf8");
+  const hookScript = `
+    (() => {
+      const rankAssetPattern =
+        /\\/(?:sanma|sima)_(?:fish|queshi|quejie|quehao|quesheng|huntian)\\.png/i;
 
-    window.__mjsHooksInstalled = true;
-    window.__mjsCaptured = [];
-
-    const pushEntry = (entry) => {
-      window.__mjsCaptured.push({
-        time: new Date().toISOString(),
-        ...entry
-      });
-      if (window.__mjsCaptured.length > 200) {
-        window.__mjsCaptured.shift();
+      if (window.__mjsHooksInstalled) {
+        return;
       }
-    };
 
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = async (...args) => {
-      const response = await originalFetch(...args);
-      try {
-        const url = String(args[0]?.url || args[0] || "");
-        if (isInterestingUrlForPage(url)) {
-          const text = await response.clone().text();
-          if (isInterestingTextPayloadForPage(text) || rankAssetPattern.test(url)) {
-            pushEntry({
-              kind: "fetch",
-              url,
-              body: rankAssetPattern.test(url) ? undefined : text.slice(0, 1200)
-            });
-          }
-        }
-      } catch (error) {
-        pushEntry({
-          kind: "fetch-error",
-          error: String(error)
+      window.__mjsHooksInstalled = true;
+      window.__mjsCaptured = [];
+
+      const pushEntry = (entry) => {
+        window.__mjsCaptured.push({
+          time: new Date().toISOString(),
+          ...entry
         });
-      }
-      return response;
-    };
+        if (window.__mjsCaptured.length > 200) {
+          window.__mjsCaptured.shift();
+        }
+      };
 
-    const NativeWebSocket = window.WebSocket;
-    function WrappedWebSocket(...args) {
-      const socket = new NativeWebSocket(...args);
-      socket.addEventListener("message", (event) => {
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        const response = await originalFetch(...args);
         try {
-          const text = typeof event.data === "string" ? event.data : "";
-          if (matchesRankHintForPage(text)) {
-            pushEntry({
-              kind: "ws-message",
-              url: String(args[0] || ""),
-              body: text.slice(0, 1200)
-            });
+          const url = String(args[0]?.url || args[0] || "");
+          if (isInterestingUrlForPage(url)) {
+            const text = await response.clone().text();
+            if (isInterestingTextPayloadForPage(text) || rankAssetPattern.test(url)) {
+              pushEntry({
+                kind: "fetch",
+                url,
+                body: rankAssetPattern.test(url) ? undefined : text.slice(0, 1200)
+              });
+            }
           }
         } catch (error) {
           pushEntry({
-            kind: "ws-error",
+            kind: "fetch-error",
             error: String(error)
           });
         }
-      });
-      return socket;
-    }
+        return response;
+      };
 
-    function matchesRankHintForPage(text) {
-      return /rank|level|pt|point|score|dan|\u521d\u5fc3|\u96c0\u58eb|\u96c0\u5091|\u96c0\u8c6a|\u96c0\u8056|\u9b42\u5929|\u6bb5\u4f4d/i.test(text);
-    }
+      const NativeWebSocket = window.WebSocket;
+      function WrappedWebSocket(...args) {
+        const socket = new NativeWebSocket(...args);
+        socket.addEventListener("message", (event) => {
+          try {
+            const text = typeof event.data === "string" ? event.data : "";
+            if (matchesRankHintForPage(text)) {
+              pushEntry({
+                kind: "ws-message",
+                url: String(args[0] || ""),
+                body: text.slice(0, 1200)
+              });
+            }
+          } catch (error) {
+            pushEntry({
+              kind: "ws-error",
+              error: String(error)
+            });
+          }
+        });
+        return socket;
+      }
 
-    function isInterestingTextPayloadForPage(text) {
-      return /rank|level|pt|point|score|dan|account|profile/i.test(text);
-    }
+      function matchesRankHintForPage(text) {
+        return /rank|level|pt|point|score|dan|\\u521d\\u5fc3|\\u96c0\\u58eb|\\u96c0\\u5091|\\u96c0\\u8c6a|\\u96c0\\u8056|\\u9b42\\u5929|\\u6bb5\\u4f4d/i.test(text);
+      }
 
-    function isInterestingUrlForPage(url) {
-      return (
-        /account|profile|user|role|rank|level|dan|point|score/i.test(url) ||
-        rankAssetPattern.test(url)
-      );
-    }
+      function isInterestingTextPayloadForPage(text) {
+        return /rank|level|pt|point|score|dan|account|profile/i.test(text);
+      }
 
-    WrappedWebSocket.prototype = NativeWebSocket.prototype;
-    Object.setPrototypeOf(WrappedWebSocket, NativeWebSocket);
-    window.WebSocket = WrappedWebSocket;
-  });
+      function isInterestingUrlForPage(url) {
+        return (
+          /account|profile|user|role|rank|level|dan|point|score/i.test(url) ||
+          rankAssetPattern.test(url)
+        );
+      }
+
+      WrappedWebSocket.prototype = NativeWebSocket.prototype;
+      Object.setPrototypeOf(WrappedWebSocket, NativeWebSocket);
+      window.WebSocket = WrappedWebSocket;
+    })();
+  `;
+
+  // Install helper code for future navigations and also for the currently open page.
+  await page.addInitScript({ content: helperScript });
+  await page.addScriptTag({ content: helperScript });
+  await page.addInitScript({ content: hookScript });
+  await page.addScriptTag({ content: hookScript });
 }

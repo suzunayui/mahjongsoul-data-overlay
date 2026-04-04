@@ -45,52 +45,11 @@ function spawnNode(scriptPath, exeBaseName, label) {
 export async function main() {
   if (process.pkg) {
     await overlayMain();
-    const distDir = path.dirname(process.execPath);
-    const projectRoot = path.resolve(distDir, "..");
-    const spawnExternalNode = (scriptName, label) => {
-      const child = spawn("node.exe", [path.join(projectRoot, scriptName)], {
-        cwd: distDir,
-        stdio: "inherit"
-      });
-
-      child.on("error", (error) => {
+    const wrap = (label, task) =>
+      task.catch((error) => {
         console.error(`${label} failed:`, error);
       });
-
-      child.on("exit", (code, signal) => {
-        if (signal) {
-          console.log(`${label} exited with signal ${signal}`);
-          return;
-        }
-        console.log(`${label} exited with code ${code ?? 0}`);
-      });
-
-      return child;
-    };
-
-    const collector = spawnExternalNode("mjs-collect.js", "collector");
-    const matcher = spawnExternalNode("mjs-match-watch.js", "match");
-
-    const shutdown = () => {
-      if (collector && !collector.killed) {
-        collector.kill();
-      }
-      if (matcher && !matcher.killed) {
-        matcher.kill();
-      }
-    };
-
-    process.on("SIGINT", () => {
-      shutdown();
-      process.exit(0);
-    });
-
-    process.on("SIGTERM", () => {
-      shutdown();
-      process.exit(0);
-    });
-
-    await new Promise(() => {});
+    await Promise.all([wrap("collector", collectMain()), wrap("match", matchMain())]);
     return;
   }
 

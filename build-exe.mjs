@@ -9,6 +9,8 @@ const buildDir = path.join(projectRoot, ".pkg-build");
 const distDir = path.join(projectRoot, "dist");
 const overlaySrcDir = path.join(projectRoot, "overlay");
 const overlayDistDir = path.join(distDir, "overlay");
+const pageHelpersSrcPath = path.join(projectRoot, "page-helpers.js");
+const pageHelpersDistPath = path.join(distDir, "page-helpers.js");
 
 const targets = {
   launch: {
@@ -92,6 +94,7 @@ async function main() {
   await fs.mkdir(buildDir, { recursive: true });
   await fs.mkdir(distDir, { recursive: true });
   await copyDirectory(overlaySrcDir, overlayDistDir);
+  await fs.copyFile(pageHelpersSrcPath, pageHelpersDistPath);
 
   if (requested === "all") {
     await buildTarget("launch");
