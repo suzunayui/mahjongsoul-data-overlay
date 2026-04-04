@@ -2,6 +2,10 @@
 
 ![mahjongsoul-data-overlay screenshot](2026-04-05.png)
 
+<video src="video.mp4" controls muted playsinline width="960"></video>
+
+動画ファイルを直接開く場合: [video.mp4](video.mp4)
+
 ブラウザ版の雀魂からランク情報や対局中の点数を読み取り、OBS のブラウザソースで表示するためのツールです。
 
 通常利用では `Node.js` は不要です。  
