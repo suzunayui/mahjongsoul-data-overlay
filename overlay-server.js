@@ -2,18 +2,27 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 const port = Number(process.env.OVERLAY_PORT || 4173);
-const pointsDir = path.resolve("points");
-const latestMatchJsonPath = path.resolve("records", "match-latest.json");
-const recordsSummaryPath = path.resolve("records", "summary.json");
-const overlayHtmlPath = path.resolve("overlay", "index.html");
-const pointsHtmlPath = path.resolve("overlay", "points.html");
-const recordsHtmlPath = path.resolve("overlay", "records.html");
-const overlayCssPath = path.resolve("overlay", "styles.css");
-const overlayJsPath = path.resolve("overlay", "app.js");
-const pointsJsPath = path.resolve("overlay", "points.js");
-const recordsJsPath = path.resolve("overlay", "records.js");
+const moduleDir =
+  typeof __dirname === "string"
+    ? __dirname
+    : path.dirname(fileURLToPath(import.meta.url));
+const dataBaseDir = process.pkg ? path.dirname(process.execPath) : process.cwd();
+const pointsDir = path.join(dataBaseDir, "points");
+const latestMatchJsonPath = path.join(dataBaseDir, "records", "match-latest.json");
+const recordsSummaryPath = path.join(dataBaseDir, "records", "summary.json");
+const overlayDir = process.pkg
+  ? path.join(path.dirname(process.execPath), "overlay")
+  : path.join(moduleDir, "overlay");
+const overlayHtmlPath = path.join(overlayDir, "index.html");
+const pointsHtmlPath = path.join(overlayDir, "points.html");
+const recordsHtmlPath = path.join(overlayDir, "records.html");
+const overlayCssPath = path.join(overlayDir, "styles.css");
+const overlayJsPath = path.join(overlayDir, "app.js");
+const pointsJsPath = path.join(overlayDir, "points.js");
+const recordsJsPath = path.join(overlayDir, "records.js");
 
 function sendJson(res, statusCode, body) {
   res.writeHead(statusCode, {
@@ -219,16 +228,39 @@ async function handleRequest(req, res) {
   }
 }
 
-const server = http.createServer((req, res) => {
-  handleRequest(req, res).catch((error) => {
-    sendJson(res, 500, {
-      ok: false,
-      message: "Unhandled server error",
-      detail: String(error.message || error)
+export async function main() {
+  const server = http.createServer((req, res) => {
+    handleRequest(req, res).catch((error) => {
+      sendJson(res, 500, {
+        ok: false,
+        message: "Unhandled server error",
+        detail: String(error.message || error)
+      });
     });
   });
-});
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`Overlay server listening on http://127.0.0.1:${port}/rank`);
-});
+  await new Promise((resolve, reject) => {
+    server.once("error", (error) => {
+      if (error && error.code === "EADDRINUSE") {
+        console.log(`Overlay server already running on http://127.0.0.1:${port}/rank`);
+        resolve();
+        return;
+      }
+      reject(error);
+    });
+
+    server.listen(port, "127.0.0.1", () => {
+      console.log(`Overlay server listening on http://127.0.0.1:${port}/rank`);
+      resolve();
+    });
+  });
+}
+
+const isDirectRun = process.argv[1] != null && /overlay-server\.js$/i.test(process.argv[1]);
+
+if (isDirectRun) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
