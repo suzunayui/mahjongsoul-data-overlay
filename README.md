@@ -1,8 +1,11 @@
 # mahjongsoul-data-overlay
 
-ブラウザ版の雀魂からランク情報と対局中の点数を読み取り、OBS のブラウザソースで表示するためのツールです。
+ブラウザ版の雀魂からランク情報や対局中の点数を読み取り、OBS のブラウザソースで表示するためのツールです。
 
-今は `exe` だけで実行できます。`Node.js` は通常利用には不要です。
+通常利用では `Node.js` は不要です。  
+配布版は GitHub Releases からダウンロードしてください。
+
+- ダウンロード先: <https://github.com/suzunayui/mahjongsoul-data-overlay/releases/tag/mahjongsoul-data-overlay-20260405>
 
 ## できること
 
@@ -18,7 +21,7 @@
 - 点数表示: `http://127.0.0.1:4173/points`
 - 順位集計: `http://127.0.0.1:4173/records`
 
-## 通常の使い方
+## 使い方
 
 ### 必要なもの
 
@@ -27,29 +30,29 @@
 
 ### 手順
 
-1. `dist` フォルダをそのまま使います
-2. `mahjongsoul-launch.exe` を起動します
+1. GitHub Releases から配布ファイルをダウンロードします
+2. 展開したフォルダの中にある `mahjongsoul-launch.exe` を起動します
 3. 開いた Chrome で雀魂を使います
 4. `mahjongsoul-collect.exe` を起動します
 5. OBS のブラウザソースに URL を設定します
 
 使うファイル:
 
-- `dist/mahjongsoul-launch.exe`
-- `dist/mahjongsoul-collect.exe`
+- `mahjongsoul-launch.exe`
+- `mahjongsoul-collect.exe`
 
 注意:
 
-- `mahjongsoul-collect.exe` は `dist` フォルダごとそのまま使ってください
-- `dist/overlay` フォルダも必要です
+- `mahjongsoul-collect.exe` は配布フォルダごとそのまま使ってください
+- `overlay` フォルダも必要です
 - `launch.exe` を先に起動してから `collect.exe` を起動してください
 
 ## 保存されるデータ
 
-`exe` 版では、保存先は `dist` 配下です。
+配布版では、保存先は実行ファイルと同じフォルダ配下です。
 
-- `dist/points`
-- `dist/records`
+- `points`
+- `records`
 
 主なファイル:
 
@@ -64,13 +67,9 @@
 - `summary.json`
   自分の順位回数集計
 
-## Node.js を使う開発用実行
+## 開発用
 
-開発や修正をするときは Node.js 版も使えます。
-
-### 必要なもの
-
-- Node.js
+コードを修正したり、配布用 exe を再ビルドしたい場合だけ `Node.js` が必要です。
 
 ### セットアップ
 
@@ -78,16 +77,14 @@
 npm.cmd install
 ```
 
-### 実行
+### 開発用実行
 
 ```powershell
 npm.cmd run mjs:launch
 npm.cmd run mjs:collect
 ```
 
-## exe のビルド
-
-開発者向けです。
+### exe のビルド
 
 ```powershell
 npm.cmd run build:exe
