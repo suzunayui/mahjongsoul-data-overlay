@@ -1,5 +1,7 @@
 # mahjongsoul-data-overlay
 
+![mahjongsoul-data-overlay screenshot](2026-04-05.png)
+
 ブラウザ版の雀魂からランク情報や対局中の点数を読み取り、OBS のブラウザソースで表示するためのツールです。
 
 通常利用では `Node.js` は不要です。  
