@@ -1,0 +1,19 @@
+{
+  "name": "mahjongsoul-data-overlay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "inspect": "node inspect-mahjongsoul.js",
+    "mjs": "node mjs-launch.js",
+    "mjs:launch": "node mjs-launch.js",
+    "mjs:collect": "node mjs-collect-with-overlay.js",
+    "mjs:collect:raw": "node mjs-collect.js",
+    "mjs:match": "node mjs-match-watch.js",
+    "mjs:dump": "node mjs-dump.js",
+    "overlay": "node overlay-server.js"
+  },
+  "dependencies": {
+    "playwright": "^1.59.1"
+  }
+}

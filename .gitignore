@@ -1,0 +1,4 @@
+.playwright-profile/
+node_modules/
+points/
+records/
