@@ -9,8 +9,7 @@ const latestMatchStatePath = path.join(recordsDir, "match-latest.json");
 const recordSeenKeysPath = path.join(recordsDir, "seen-record-keys.json");
 const pollMs = Number(process.env.MJS_MATCH_POLL_MS || 1000);
 
-async function extractMatchState(page) {
-  return await page.evaluate(() => {
+const extractMatchStateInPage = function () {
     const ensureRoundHook = () => {
       if (!window.__mjsRoundCapture) {
         window.__mjsRoundCapture = {
@@ -239,7 +238,12 @@ async function extractMatchState(page) {
       : [];
 
     const seatLabels = ["self", "shimocha", "toimen", "kamicha"];
-    const seatLabelsJp = ["自分", "下家", "対面", "上家"];
+    const seatLabelsJp = [
+      "\u81ea\u5206",
+      "\u4e0b\u5bb6",
+      "\u5bfe\u9762",
+      "\u4e0a\u5bb6"
+    ];
     const selfAbsoluteSeat = typeof desktopMgr?.seat === "number" ? desktopMgr.seat : null;
     const newRoundArgs =
       desktopMgr?.actionMap?.ActionNewRound?.args?.[0] ??
@@ -447,7 +451,10 @@ async function extractMatchState(page) {
       desktopSnapshot: summarize(desktopMgr),
       actionSnapshot: summarize(actionMgr)
     };
-  });
+};
+
+async function extractMatchState(page) {
+  return await page.evaluate("(" + extractMatchStateInPage.toString() + ")()");
 }
 
 async function writeLatestMatchState(snapshot) {
@@ -608,7 +615,7 @@ async function dedupeDailyRecordFiles() {
   }
 }
 
-async function main() {
+export async function main() {
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
   const context = browser.contexts()[0];
 
@@ -701,7 +708,11 @@ async function main() {
   await new Promise(() => {});
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+const isDirectRun = process.argv[1] != null && /mjs-match-watch\.js$/i.test(process.argv[1]);
+
+if (isDirectRun) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

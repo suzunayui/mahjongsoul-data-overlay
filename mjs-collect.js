@@ -18,6 +18,149 @@ import {
 const pointsDir = path.resolve("points");
 const pollMs = Number(process.env.MJS_POLL_MS || 2000);
 
+async function extractProfileDataForPkg(page) {
+  return await page.evaluate(`
+    (() => {
+      const accountData = window.GameMgr?.Inst?.account_data ?? null;
+      const cfgRoot = window.cfg ?? null;
+
+      const parseRankLevel = (value) => {
+        if (!value || typeof value !== "object") {
+          return null;
+        }
+        const id = typeof value.id === "number" ? value.id : null;
+        const score = typeof value.score === "number" ? value.score : null;
+        if (id == null) {
+          return null;
+        }
+        const idString = String(id).padStart(5, "0");
+        const modeCode = Number(idString.slice(0, 1));
+        const rankCode = Number(idString.slice(1, 3));
+        const star = Number(idString.slice(3, 5));
+        const modeNameMap = { 1: "yonma", 2: "sanma" };
+        const rankNameMap = {
+          1: "\\u521d\\u5fc3",
+          2: "\\u96c0\\u58eb",
+          3: "\\u96c0\\u5091",
+          4: "\\u96c0\\u8c6a",
+          5: "\\u96c0\\u8056",
+          6: "\\u9b42\\u5929"
+        };
+        return {
+          id,
+          score,
+          modeCode,
+          modeName: modeNameMap[modeCode] || null,
+          rankCode,
+          rankName: rankNameMap[rankCode] || null,
+          star
+        };
+      };
+
+      const findConfigEntry = (root, targetId) => {
+        if (!root || targetId == null) {
+          return null;
+        }
+        const direct = root[targetId] ?? root[String(targetId)] ?? null;
+        if (direct) {
+          return direct;
+        }
+        const queue = [root];
+        const seen = new WeakSet();
+        while (queue.length > 0) {
+          const current = queue.shift();
+          if (!current || typeof current !== "object") {
+            continue;
+          }
+          if (seen.has(current)) {
+            continue;
+          }
+          seen.add(current);
+          if (Array.isArray(current)) {
+            const found = current.find((item) => item && typeof item === "object" && item.id === targetId);
+            if (found) {
+              return found;
+            }
+            for (const item of current.slice(0, 50)) {
+              if (item && typeof item === "object") {
+                queue.push(item);
+              }
+            }
+            continue;
+          }
+          for (const key of Reflect.ownKeys(current).filter((key) => typeof key === "string").slice(0, 80)) {
+            let item;
+            try {
+              item = current[key];
+            } catch {
+              continue;
+            }
+            if (item && typeof item === "object" && item.id === targetId) {
+              return item;
+            }
+            if (item && typeof item === "object") {
+              queue.push(item);
+            }
+          }
+        }
+        return null;
+      };
+
+      const summarizeValue = (value) => {
+        if (!value || typeof value !== "object") {
+          return value;
+        }
+        const out = {};
+        for (const key of Reflect.ownKeys(value).filter((key) => typeof key === "string").slice(0, 30)) {
+          let item;
+          try {
+            item = value[key];
+          } catch {
+            continue;
+          }
+          if (
+            item == null ||
+            typeof item === "string" ||
+            typeof item === "number" ||
+            typeof item === "boolean"
+          ) {
+            out[key] = item;
+          }
+        }
+        return out;
+      };
+
+      const level = parseRankLevel(accountData?.level);
+      const level3 = parseRankLevel(accountData?.level3);
+      const levelDefinitionRoot = cfgRoot?.level_definition ?? null;
+
+      return {
+        accountData: {
+          account_id: accountData?.account_id ?? null,
+          nickname: accountData?.nickname ?? null,
+          title: accountData?.title ?? null
+        },
+        extracted: {
+          accountId: accountData?.account_id ?? null,
+          nickname: accountData?.nickname ?? null,
+          title: accountData?.title ?? null,
+          level,
+          level3,
+          levelDefinition: {
+            yonma: summarizeValue(findConfigEntry(levelDefinitionRoot, level?.id)),
+            sanma: summarizeValue(findConfigEntry(levelDefinitionRoot, level3?.id))
+          },
+          rankIntroduce: {
+            yonma: null,
+            sanma: null
+          },
+          scoreCandidates: {}
+        }
+      };
+    })()
+  `);
+}
+
 function toDailyPointsSnapshot(report) {
   const extracted = report?.extractedProfile?.extracted || {};
   return {
@@ -56,10 +199,34 @@ function getPointsFingerprint(snapshot) {
 }
 
 async function buildReport(page, networkHits) {
-  const visibleHints = await collectVisibleHints(page);
-  const runtimeHints = await collectRuntimeHints(page);
-  const extractedProfile = await extractProfileData(page);
-  const capturedInPage = await page.evaluate(() => window.__mjsCaptured || []);
+  let visibleHints = null;
+  let runtimeHints = null;
+  let extractedProfile;
+
+  if (!process.pkg) {
+    try {
+      visibleHints = await collectVisibleHints(page);
+    } catch (error) {
+      console.error("collectVisibleHints failed:", error);
+      throw error;
+    }
+
+    try {
+      runtimeHints = await collectRuntimeHints(page);
+    } catch (error) {
+      console.error("collectRuntimeHints failed:", error);
+      throw error;
+    }
+  }
+
+  try {
+    extractedProfile = process.pkg ? await extractProfileDataForPkg(page) : await extractProfileData(page);
+  } catch (error) {
+    console.error("extractProfileData failed:", error);
+    throw error;
+  }
+
+  const capturedInPage = await page.evaluate("window.__mjsCaptured || []");
 
   return {
     createdAt: new Date().toISOString(),
@@ -109,7 +276,7 @@ async function updatePointsFiles(report) {
   return { changed: false, latestPath, startPath };
 }
 
-async function main() {
+export async function main() {
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
   const context = browser.contexts()[0];
 
@@ -223,7 +390,11 @@ async function main() {
   await new Promise(() => {});
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+const isDirectRun = process.argv[1] != null && /mjs-collect\.js$/i.test(process.argv[1]);
+
+if (isDirectRun) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

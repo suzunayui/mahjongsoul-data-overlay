@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import process from "node:process";
 import {
   debugPort,
   headless,
@@ -9,7 +10,7 @@ import {
   userDataDir
 } from "./mjs-common.js";
 
-async function main() {
+export async function main() {
   const browserContext = await chromium.launchPersistentContext(userDataDir, {
     channel: "chrome",
     headless,
@@ -42,7 +43,11 @@ async function main() {
   browserContext.on("close", () => process.exit(0));
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+const isDirectRun = process.argv[1] != null && /mjs-launch\.js$/i.test(process.argv[1]);
+
+if (isDirectRun) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

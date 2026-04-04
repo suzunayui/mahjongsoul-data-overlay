@@ -41,55 +41,53 @@ export function summarizeEntry(entry) {
 }
 
 export async function collectVisibleHints(page) {
-  return await page.evaluate(() => {
-    const rankHintPattern =
-      /rank|level|pt|point|score|dan|\u521d\u5fc3|\u96c0\u58eb|\u96c0\u5091|\u96c0\u8c6a|\u96c0\u8056|\u9b42\u5929|\u6bb5\u4f4d/i;
-    const rankAssetPattern =
-      /\/(?:sanma|sima)_(?:fish|queshi|quejie|quehao|quesheng|huntian)\.png/i;
-
-    const texts = [...document.querySelectorAll("body *")]
-      .map((el) => (el.innerText || "").trim())
-      .filter(Boolean)
-      .filter((text) => text.length < 120)
-      .filter((text, index, array) => array.indexOf(text) === index);
-
-    const rankLikeTexts = texts
-      .filter((text) => rankHintPattern.test(text))
-      .slice(0, 60);
-
-    const storageMatches = [];
-    for (const [storeName, store] of [["localStorage", localStorage], ["sessionStorage", sessionStorage]]) {
-      for (let i = 0; i < store.length; i += 1) {
-        const key = store.key(i);
-        const value = store.getItem(key);
-        if (
-          /rank|level|dan|grade|point|score|pt/i.test(key || "") ||
-          rankHintPattern.test(value || "")
-        ) {
-          storageMatches.push({
-            store: storeName,
-            key,
-            value: value && value.length > 300 ? `${value.slice(0, 300)}...(truncated)` : value
-          });
+  return await page.evaluate(`
+    (() => {
+      const rankHintPattern =
+        /rank|level|pt|point|score|dan|\\u521d\\u5fc3|\\u96c0\\u58eb|\\u96c0\\u5091|\\u96c0\\u8c6a|\\u96c0\\u8056|\\u9b42\\u5929|\\u6bb5\\u4f4d/i;
+      const rankAssetPattern =
+        /\\/(?:sanma|sima)_(?:fish|queshi|quejie|quehao|quesheng|huntian)\\.png/i;
+      const texts = [...document.querySelectorAll("body *")]
+        .map((el) => (el.innerText || "").trim())
+        .filter(Boolean)
+        .filter((text) => text.length < 120)
+        .filter((text, index, array) => array.indexOf(text) === index);
+      const rankLikeTexts = texts
+        .filter((text) => rankHintPattern.test(text))
+        .slice(0, 60);
+      const storageMatches = [];
+      for (const [storeName, store] of [["localStorage", localStorage], ["sessionStorage", sessionStorage]]) {
+        for (let i = 0; i < store.length; i += 1) {
+          const key = store.key(i);
+          const value = store.getItem(key);
+          if (
+            /rank|level|dan|grade|point|score|pt/i.test(key || "") ||
+            rankHintPattern.test(value || "")
+          ) {
+            storageMatches.push({
+              store: storeName,
+              key,
+              value: value && value.length > 300 ? value.slice(0, 300) + "...(truncated)" : value
+            });
+          }
         }
       }
-    }
-
-    return {
-      title: document.title,
-      url: location.href,
-      rankLikeTexts,
-      storageMatches: storageMatches.slice(0, 30),
-      loadedRankAssets: performance.getEntriesByType("resource")
-        .map((entry) => entry.name)
-        .filter((name) => rankAssetPattern.test(name))
-        .slice(-20)
-    };
-  });
+      return {
+        title: document.title,
+        url: location.href,
+        rankLikeTexts,
+        storageMatches: storageMatches.slice(0, 30),
+        loadedRankAssets: performance.getEntriesByType("resource")
+          .map((entry) => entry.name)
+          .filter((name) => rankAssetPattern.test(name))
+          .slice(-20)
+      };
+    })()
+  `);
 }
 
 export async function collectRuntimeHints(page) {
-  return await page.evaluate(() => {
+  const evaluator = function () {
     const seen = new WeakSet();
     const queue = [];
     const hits = [];
@@ -281,11 +279,13 @@ export async function collectRuntimeHints(page) {
       candidateResults,
       hits
     };
-  });
+  };
+
+  return await page.evaluate("(" + evaluator.toString() + ")()");
 }
 
 export async function extractProfileData(page) {
-  return await page.evaluate(() => {
+  const evaluator = function () {
     const getByPath = (root, path) => {
       let current = root;
       for (const part of path.split(".")) {
@@ -540,7 +540,9 @@ export async function extractProfileData(page) {
         scoreCandidates
       }
     };
-  });
+  };
+
+  return await page.evaluate("(" + evaluator.toString() + ")()");
 }
 
 export async function installHooks(page) {
