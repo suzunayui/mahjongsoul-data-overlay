@@ -1,5 +1,7 @@
 # mahjongsoul-data-overlay
 
+![スクリーンショット](./2026-04-05.png)
+
 動画リンク: <https://www.youtube.com/watch?v=Jx6_zLfGgQk>
 
 雀魂の表示データを読み取って、OBS のブラウザソースで使えるオーバーレイを表示するツールです。
