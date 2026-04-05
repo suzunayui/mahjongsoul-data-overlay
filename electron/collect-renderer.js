@@ -1,6 +1,19 @@
 const collectStatus = document.querySelector("#collect-status");
 const htmlDir = document.querySelector("#html-dir");
+const debugDir = document.querySelector("#debug-dir");
+const debugJsonPath = document.querySelector("#debug-json-path");
+const collectStartButton = document.querySelector("#collect-start");
+const collectStopButton = document.querySelector("#collect-stop");
 const settingsStatus = document.querySelector("#settings-status");
+const obsStatus = document.querySelector("#obs-status");
+const obsStatusMessage = document.querySelector("#obs-status-message");
+const obsSettingsStatus = document.querySelector("#obs-settings-status");
+const obsEnabled = document.querySelector("#obs-enabled");
+const obsWebsocketUrl = document.querySelector("#obs-websocket-url");
+const obsPassword = document.querySelector("#obs-password");
+const obsMediaSourceName = document.querySelector("#obs-media-source-name");
+const obsInputList = document.querySelector("#obs-input-list");
+const obsInputSelect = document.querySelector("#obs-input-select");
 const tabButtons = [...document.querySelectorAll("[data-tab-target]")];
 const tabPanels = [...document.querySelectorAll("[data-tab-panel]")];
 const hanScopeInputs = [...document.querySelectorAll('input[name="han-count-scope"]')];
@@ -10,8 +23,15 @@ if (!window.mahjongOverlayApp) {
 }
 
 function setStatusText(element, running) {
-  element.textContent = running ? "取得中" : "停止中";
+  element.textContent = running ? "収集中" : "停止中";
   element.style.color = running ? "#3dd598" : "#ebf2ff";
+}
+
+function setObsStatus(payload) {
+  const obs = payload?.obs || {};
+  obsStatus.textContent = obs.connecting ? "接続中" : obs.connected ? "接続済み" : "未接続";
+  obsStatus.style.color = obs.connecting ? "#59a6ff" : obs.connected ? "#3dd598" : "#ebf2ff";
+  obsStatusMessage.textContent = obs.message || "";
 }
 
 function switchTab(target) {
@@ -23,36 +43,115 @@ function switchTab(target) {
   });
 }
 
-async function refreshStatus() {
-  const status = await window.mahjongOverlayApp.getStatus();
-  setStatusText(collectStatus, status.collectRunning);
-  htmlDir.textContent = `OBS 用 HTML フォルダ: ${status.htmlDir}`;
+function renderPaths(status) {
+  htmlDir.textContent = `OBS 用 HTML フォルダ: ${status.htmlDir || "-"}`;
+  debugDir.textContent = `デバッグ JSON フォルダ: ${status.debugOutputDir || "-"}`;
+  debugJsonPath.textContent = `最新 JSON: ${status.latestMatchDebugPath || "-"}`;
 }
 
-async function loadSettings() {
-  const settings = await window.mahjongOverlayApp.getSettings();
+function setCollectButtonState(running) {
+  collectStartButton.disabled = running;
+  collectStopButton.disabled = !running;
+}
+
+function applySettings(settings) {
   const scope = settings?.hanCountScope || "all_players";
   hanScopeInputs.forEach((input) => {
     input.checked = input.value === scope;
   });
+
+  const obs = settings?.obsIntegration || {};
+  obsEnabled.checked = obs.enabled === true;
+  obsWebsocketUrl.value = obs.websocketUrl || "ws://127.0.0.1:4455";
+  obsPassword.value = obs.password || "";
+  obsMediaSourceName.value = obs.mediaSourceName || "";
+}
+
+function collectFormSettings() {
+  return {
+    hanCountScope: hanScopeInputs.find((input) => input.checked)?.value || "all_players",
+    obsIntegration: {
+      enabled: obsEnabled.checked,
+      websocketUrl: obsWebsocketUrl.value.trim(),
+      password: obsPassword.value,
+      mediaSourceName: obsMediaSourceName.value.trim()
+    }
+  };
+}
+
+async function refreshStatus() {
+  const status = await window.mahjongOverlayApp.getStatus();
+  setStatusText(collectStatus, status.collectRunning);
+  setCollectButtonState(status.collectRunning);
+  renderPaths(status);
+  setObsStatus(status);
+}
+
+async function loadSettings() {
+  const settings = await window.mahjongOverlayApp.getSettings();
+  applySettings(settings);
 }
 
 function setSettingsMessage(message) {
   settingsStatus.textContent = message;
 }
 
-document.querySelector("#collect-start").addEventListener("click", async () => {
+function setObsSettingsMessage(message) {
+  obsSettingsStatus.textContent = message;
+}
+
+function renderObsInputOptions(inputs) {
+  obsInputList.replaceChildren();
+  obsInputSelect.replaceChildren();
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = Array.isArray(inputs) && inputs.length > 0
+    ? "ソースを選択してください"
+    : "ソース一覧を取得してください";
+  obsInputSelect.append(placeholder);
+
+  for (const input of Array.isArray(inputs) ? inputs : []) {
+    if (!input?.inputName) {
+      continue;
+    }
+    const option = document.createElement("option");
+    option.value = input.inputName;
+    const kind = input.unversionedInputKind || input.inputKind;
+    if (kind) {
+      option.label = `${input.inputName} (${kind})`;
+    }
+    obsInputList.append(option);
+
+    const selectOption = document.createElement("option");
+    selectOption.value = input.inputName;
+    selectOption.textContent = kind ? `${input.inputName} (${kind})` : input.inputName;
+    obsInputSelect.append(selectOption);
+  }
+}
+
+obsInputSelect.addEventListener("change", () => {
+  if (obsInputSelect.value) {
+    obsMediaSourceName.value = obsInputSelect.value;
+  }
+});
+
+collectStartButton.addEventListener("click", async () => {
   await window.mahjongOverlayApp.startCollect();
   await refreshStatus();
 });
 
-document.querySelector("#collect-stop").addEventListener("click", async () => {
+collectStopButton.addEventListener("click", async () => {
   await window.mahjongOverlayApp.stopCollect();
   await refreshStatus();
 });
 
 document.querySelector("#open-html").addEventListener("click", async () => {
   await window.mahjongOverlayApp.openHtmlFolder();
+});
+
+document.querySelector("#open-debug").addEventListener("click", async () => {
+  await window.mahjongOverlayApp.openDebugFolder();
 });
 
 tabButtons.forEach((button) => {
@@ -62,53 +161,120 @@ tabButtons.forEach((button) => {
 });
 
 document.querySelector("#save-settings").addEventListener("click", async () => {
-  const selected = hanScopeInputs.find((input) => input.checked)?.value || "all_players";
-  await window.mahjongOverlayApp.saveSettings({
-    hanCountScope: selected
-  });
+  const current = await window.mahjongOverlayApp.getSettings();
+  const next = {
+    ...current,
+    hanCountScope: hanScopeInputs.find((input) => input.checked)?.value || "all_players"
+  };
+  await window.mahjongOverlayApp.saveSettings(next);
   setSettingsMessage("設定を保存しました");
 });
 
+document.querySelector("#save-obs-settings").addEventListener("click", async () => {
+  const current = await window.mahjongOverlayApp.getSettings();
+  const next = {
+    ...current,
+    obsIntegration: collectFormSettings().obsIntegration
+  };
+  await window.mahjongOverlayApp.saveSettings(next);
+  setObsSettingsMessage("OBS 設定を保存しました");
+  await refreshStatus();
+});
+
+document.querySelector("#obs-connect").addEventListener("click", async () => {
+  const current = await window.mahjongOverlayApp.getSettings();
+  const next = {
+    ...current,
+    obsIntegration: collectFormSettings().obsIntegration
+  };
+  await window.mahjongOverlayApp.saveSettings(next);
+  try {
+    await window.mahjongOverlayApp.connectObs();
+    setObsSettingsMessage("OBS に接続しました");
+  } catch (error) {
+    setObsSettingsMessage(error?.message || String(error));
+  }
+  await refreshStatus();
+});
+
+document.querySelector("#obs-disconnect").addEventListener("click", async () => {
+  await window.mahjongOverlayApp.disconnectObs();
+  setObsSettingsMessage("OBS を切断しました");
+  await refreshStatus();
+});
+
+document.querySelector("#obs-play-test").addEventListener("click", async () => {
+  const current = await window.mahjongOverlayApp.getSettings();
+  const next = {
+    ...current,
+    obsIntegration: collectFormSettings().obsIntegration
+  };
+  await window.mahjongOverlayApp.saveSettings(next);
+  try {
+    await window.mahjongOverlayApp.playObsRiichi();
+    setObsSettingsMessage("メディアソースをテスト再生しました");
+  } catch (error) {
+    setObsSettingsMessage(error?.message || String(error));
+  }
+  await refreshStatus();
+});
+
+document.querySelector("#obs-refresh-inputs").addEventListener("click", async () => {
+  const current = await window.mahjongOverlayApp.getSettings();
+  const next = {
+    ...current,
+    obsIntegration: collectFormSettings().obsIntegration
+  };
+  await window.mahjongOverlayApp.saveSettings(next);
+  try {
+    const result = await window.mahjongOverlayApp.listObsInputs();
+    renderObsInputOptions(result?.inputs || []);
+    setObsSettingsMessage(`${(result?.inputs || []).length} 件のソースを取得しました`);
+  } catch (error) {
+    setObsSettingsMessage(error?.message || String(error));
+  }
+  await refreshStatus();
+});
+
 document.querySelector("#reset-han").addEventListener("click", async () => {
-  const confirmed = window.confirm("飜数をリセットして良いですか？");
+  const confirmed = window.confirm("翻数をリセットして大丈夫ですか？");
   if (!confirmed) {
     return;
   }
 
   await window.mahjongOverlayApp.resetHan();
-  setSettingsMessage("飜数をリセットしました");
+  setSettingsMessage("翻数をリセットしました");
 });
 
 document.querySelector("#reset-records").addEventListener("click", async () => {
-  const confirmed = window.confirm("順位をリセットして良いですか？");
+  const confirmed = window.confirm("戦績をリセットして大丈夫ですか？");
   if (!confirmed) {
     return;
   }
 
   await window.mahjongOverlayApp.resetRecords();
-  setSettingsMessage("順位をリセットしました");
+  setSettingsMessage("戦績をリセットしました");
 });
 
 document.querySelector("#reset-points").addEventListener("click", async () => {
-  const confirmed = window.confirm("段位ポイント増減をリセットして良いですか？");
+  const confirmed = window.confirm("点数の開始値をリセットして大丈夫ですか？");
   if (!confirmed) {
     return;
   }
 
   const result = await window.mahjongOverlayApp.resetPoints();
   if (result?.ok) {
-    setSettingsMessage("段位ポイント増減をリセットしました");
+    setSettingsMessage("点数の開始値をリセットしました");
     return;
   }
 
-  setSettingsMessage(result?.message || "段位ポイント増減のリセットに失敗しました");
+  setSettingsMessage(result?.message || "点数の開始値のリセットに失敗しました");
 });
 
 window.mahjongOverlayApp.onStatus((payload) => {
   setStatusText(collectStatus, payload.collectRunning);
-  if (payload.htmlDir) {
-    htmlDir.textContent = `OBS 用 HTML フォルダ: ${payload.htmlDir}`;
-  }
+  renderPaths(payload);
+  setObsStatus(payload);
 });
 
 Promise.all([refreshStatus(), loadSettings()]);

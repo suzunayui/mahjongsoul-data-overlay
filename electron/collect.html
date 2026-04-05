@@ -3,61 +3,115 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>データ取得</title>
+    <title>データ収集</title>
     <link rel="stylesheet" href="./simple.css" />
   </head>
   <body>
     <main class="app simple">
       <section class="panel simple-panel">
         <p class="eyebrow">Collect</p>
-        <h1>データ取得</h1>
+        <h1>データ収集</h1>
         <div class="tab-row">
-          <button class="tab-button is-active" data-tab-target="collect">データ取得</button>
+          <button class="tab-button is-active" data-tab-target="collect">収集</button>
           <button class="tab-button" data-tab-target="settings">設定</button>
+          <button class="tab-button" data-tab-target="obs">OBS連携</button>
         </div>
 
         <section class="tab-panel is-active" data-tab-panel="collect">
-          <p class="lead">ランク、点数、順位、飜数を取得して OBS 用 HTML の更新を続けます。</p>
+          <p class="lead">ランク、点数、戦績、翻数を収集して OBS 用 HTML を更新します。</p>
           <div class="status-line">
             <span>状態</span>
             <strong id="collect-status">停止中</strong>
           </div>
           <p class="hint" id="html-dir"></p>
+          <p class="hint" id="debug-dir"></p>
+          <p class="hint" id="debug-json-path"></p>
           <div class="button-row">
-            <button id="collect-start" class="primary">データ取得開始</button>
-            <button id="collect-stop">停止</button>
+            <button id="collect-start" class="primary">収集開始</button>
+            <button id="collect-stop" class="danger">停止</button>
           </div>
           <div class="button-row">
-            <button id="open-html">OBS 用フォルダを開く</button>
+            <button id="open-html">OBS 用 HTML フォルダを開く</button>
+            <button id="open-debug">デバッグ JSON を開く</button>
           </div>
         </section>
 
         <section class="tab-panel" data-tab-panel="settings">
-          <p class="lead">飜数の集計方法と、記録データのリセットを設定します。</p>
+          <p class="lead">翻数の集計範囲と、記録データのリセットを設定します。</p>
           <div class="settings-card">
-            <p class="settings-label">飜数の数え方</p>
+            <p class="settings-label">翻数の数え方</p>
             <label class="radio-row">
               <input type="radio" name="han-count-scope" value="all_players" />
-              <span>飜数は4人全員分を数える</span>
+              <span>翻数は4人全員分を数える</span>
             </label>
             <label class="radio-row">
               <input type="radio" name="han-count-scope" value="self_only" />
-              <span>飜数は自分の分だけを数える</span>
+              <span>翻数は自分の和了だけを数える</span>
             </label>
             <label class="radio-row">
               <input type="radio" name="han-count-scope" value="self_with_ron_loss" />
-              <span>飜数は自分の分だけを数えて、自分がロンされたらその分減る</span>
+              <span>翻数は自分の和了を数えて、ロンされたらその分を減らす</span>
             </label>
           </div>
           <div class="button-row">
             <button id="save-settings" class="primary">設定を保存</button>
-            <button id="reset-han">飜数をリセットする</button>
+            <button id="reset-han">翻数をリセットする</button>
           </div>
           <div class="button-row">
-            <button id="reset-records">順位をリセットする</button>
-            <button id="reset-points">段位ポイント増減をリセットする</button>
+            <button id="reset-records">戦績をリセットする</button>
+            <button id="reset-points">点数の開始値をリセットする</button>
           </div>
           <p class="hint" id="settings-status"></p>
+        </section>
+
+        <section class="tab-panel" data-tab-panel="obs">
+          <p class="lead">リーチした瞬間に、OBS WebSocket 経由で指定メディアソースを再生します。</p>
+          <div class="status-line">
+            <span>OBS 接続</span>
+            <strong id="obs-status">未接続</strong>
+          </div>
+          <p class="hint" id="obs-status-message"></p>
+          <div class="settings-card">
+            <p class="settings-label">リーチ演出</p>
+            <label class="checkbox-row">
+              <input type="checkbox" id="obs-enabled" />
+              <span>リーチ演出を使う</span>
+            </label>
+          </div>
+          <div class="settings-card form-card">
+            <label class="field-group">
+              <span class="field-label">WebSocket URL</span>
+              <input id="obs-websocket-url" type="text" placeholder="ws://127.0.0.1:4455" />
+            </label>
+            <label class="field-group">
+              <span class="field-label">パスワード</span>
+              <input id="obs-password" type="password" placeholder="必要なら入力" />
+            </label>
+            <label class="field-group">
+              <span class="field-label">メディアソース名</span>
+              <input
+                id="obs-media-source-name"
+                type="text"
+                list="obs-input-list"
+                placeholder="例: リーチ演出"
+              />
+              <datalist id="obs-input-list"></datalist>
+            </label>
+            <label class="field-group">
+              <span class="field-label">OBS ソース一覧</span>
+              <select id="obs-input-select">
+                <option value="">ソース一覧を取得してください</option>
+              </select>
+            </label>
+          </div>
+          <div class="button-row">
+            <button id="save-obs-settings" class="primary">OBS 設定を保存</button>
+            <button id="obs-connect">接続</button>
+            <button id="obs-disconnect">切断</button>
+            <button id="obs-refresh-inputs">ソース一覧を取得</button>
+            <button id="obs-play-test">テスト再生</button>
+          </div>
+          <p class="hint" id="obs-settings-status"></p>
         </section>
       </section>
     </main>
