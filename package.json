@@ -5,15 +5,6 @@
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
-    "inspect": "node inspect-mahjongsoul.js",
-    "mjs": "node mjs-launch.js",
-    "mjs:launch": "node mjs-launch.js",
-    "mjs:collect": "node mjs-collect-with-overlay.js",
-    "mjs:collect:raw": "node mjs-collect.js",
-    "mjs:match": "node mjs-match-watch.js",
-    "mjs:dump": "node mjs-dump.js",
-    "overlay": "node overlay-server.js",
-    "electron:start": "electron .",
     "electron:start:launch": "electron electron/launch-main.js",
     "electron:start:collect": "electron electron/collect-main.js",
     "build:installer:launch": "node build-electron-installer.mjs launch",
@@ -21,10 +12,7 @@
     "build:installer": "node build-electron-installer.mjs all",
     "build:electron:launch": "node build-electron.mjs launch",
     "build:electron:collect": "node build-electron.mjs collect",
-    "build:electron": "node build-electron.mjs all",
-    "build:exe:launch": "node build-exe.mjs launch",
-    "build:exe:collect": "node build-exe.mjs collect",
-    "build:exe": "node build-exe.mjs all"
+    "build:electron": "node build-electron.mjs all"
   },
   "dependencies": {
     "playwright": "^1.59.1"

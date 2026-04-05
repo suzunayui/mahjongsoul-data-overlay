@@ -143,9 +143,52 @@ h1 {
   color: var(--text);
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+}
+
 .radio-row input {
   width: 18px;
   height: 18px;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+}
+
+.form-card {
+  gap: 14px;
+}
+
+.field-group {
+  display: grid;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+input[type="text"],
+input[type="password"] {
+  appearance: none;
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(122, 162, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font: inherit;
+}
+
+input[type="text"]::placeholder,
+input[type="password"]::placeholder {
+  color: var(--muted);
 }
 
 button {
@@ -162,4 +205,14 @@ button {
 button.primary {
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   border-color: transparent;
+}
+
+button.danger {
+  background: linear-gradient(135deg, #ff6b6b, #d93636);
+  border-color: transparent;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

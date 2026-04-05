@@ -3,7 +3,7 @@
     return;
   }
 
-  const helperVersion = 3;
+  const helperVersion = 5;
   if ((window.__mjsPageHelpersVersion || 0) >= helperVersion) {
     return;
   }
@@ -21,6 +21,13 @@
       }
       if (!window.__mjsHuleCapture) {
         window.__mjsHuleCapture = {
+          events: [],
+          lastEvent: null
+        };
+      }
+      if (!window.__mjsRiichiCapture) {
+        window.__mjsRiichiCapture = {
+          actionNames: [],
           events: [],
           lastEvent: null
         };
@@ -77,9 +84,28 @@
           }
         });
       }
-    };
 
-    ensureActionHooks();
+      const riichiActionPattern = /liqi|liqibang|lizhi|riichi|reach|ready/i;
+      const riichiActionNames = actionMap
+        ? safeKeys(actionMap).filter((actionName) => riichiActionPattern.test(actionName))
+        : [];
+      window.__mjsRiichiCapture.actionNames = riichiActionNames;
+
+      for (const actionName of riichiActionNames) {
+        wrapAction(actionName, (args) => {
+          const event = {
+            actionName,
+            capturedAt: new Date().toISOString(),
+            args
+          };
+          window.__mjsRiichiCapture.lastEvent = event;
+          window.__mjsRiichiCapture.events.push(event);
+          if (window.__mjsRiichiCapture.events.length > 20) {
+            window.__mjsRiichiCapture.events.shift();
+          }
+        });
+      }
+    };
 
     const safeKeys = (value) => {
       try {
@@ -90,6 +116,8 @@
         return [];
       }
     };
+
+    ensureActionHooks();
 
     const summarize = (value, depth = 0) => {
       if (value == null) {
@@ -282,6 +310,7 @@
         )
       ) ?? null;
     const latestHuleEvent = window.__mjsHuleCapture?.lastEvent ?? null;
+    const latestRiichiEvent = window.__mjsRiichiCapture?.lastEvent ?? null;
     const latestHuleSummary = (() => {
       const payload = latestHuleEvent?.args?.[0]?.msg;
       const hules = Array.isArray(payload?.hules) ? payload.hules : [];
@@ -307,6 +336,151 @@
         scores: Array.isArray(payload?.scores) ? payload.scores.slice(0, 4) : []
       };
     })();
+    const latestRiichiSummary = (() => {
+      const payload =
+        latestRiichiEvent?.args?.[0]?.msg ??
+        latestRiichiEvent?.args?.[0] ??
+        latestRiichiEvent?.args ??
+        null;
+      if (!payload) {
+        return null;
+      }
+
+      const seat =
+        typeof payload?.seat === "number"
+          ? payload.seat
+          : typeof payload?.who === "number"
+            ? payload.who
+            : typeof payload?.index === "number"
+              ? payload.index
+              : null;
+      const score =
+        typeof payload?.score === "number"
+          ? payload.score
+          : typeof payload?.point === "number"
+            ? payload.point
+            : null;
+
+      return {
+        actionName: latestRiichiEvent?.actionName ?? null,
+        capturedAt: latestRiichiEvent?.capturedAt ?? null,
+        seat,
+        score,
+        step:
+          typeof payload?.step === "number"
+            ? payload.step
+            : typeof payload?.liqi === "number"
+              ? payload.liqi
+              : null,
+        payload: summarize(payload)
+      };
+    })();
+
+    const getVisualState = (value) => {
+      if (!value || typeof value !== "object") {
+        return {
+          active: null,
+          activeInHierarchy: null,
+          displayedInStage: null,
+          destroyed: null,
+          name: null
+        };
+      }
+      return {
+        active: typeof value._active === "boolean" ? value._active : null,
+        activeInHierarchy: typeof value._activeInHierarchy === "boolean" ? value._activeInHierarchy : null,
+        displayedInStage: typeof value._displayedInStage === "boolean" ? value._displayedInStage : null,
+        destroyed: typeof value._destroyed === "boolean" ? value._destroyed : null,
+        name: typeof value.name === "string" ? value.name : null
+      };
+    };
+
+    const absoluteSeatToRelativeSeat = (absoluteSeat) => {
+      if (typeof absoluteSeat !== "number" || typeof selfAbsoluteSeat !== "number") {
+        return null;
+      }
+      const normalized = (absoluteSeat - selfAbsoluteSeat + 4) % 4;
+      return seatLabels[normalized] ?? null;
+    };
+
+    const absoluteSeatToRelativeSeatJp = (absoluteSeat) => {
+      if (typeof absoluteSeat !== "number" || typeof selfAbsoluteSeat !== "number") {
+        return null;
+      }
+      const normalized = (absoluteSeat - selfAbsoluteSeat + 4) % 4;
+      return seatLabelsJp[normalized] ?? null;
+    };
+
+    const playerRiichiStates = Array.isArray(players)
+      ? players.map((player, index) => {
+          const absoluteSeat = typeof player?.seat === "number" ? player.seat : null;
+          const isSelfPlayer =
+            typeof absoluteSeat === "number" &&
+            typeof selfAbsoluteSeat === "number" &&
+            absoluteSeat === selfAbsoluteSeat;
+          const transLiqiState = getVisualState(player?.trans_liqi);
+          const liqibangState = getVisualState(player?.liqibang);
+          const liqibangEffectsState = getVisualState(player?.liqibang_effects);
+          const lastPai = player?.last_pai;
+          const lastTile = player?.last_tile;
+          const score =
+            typeof player?.score === "number"
+              ? player.score
+              : findFirstNumber(player, (key) => /score|point/i.test(key));
+          const duringLiqi = typeof player?.during_liqi === "boolean" ? player.during_liqi : null;
+          const duringAnpaiLiqi =
+            typeof player?.during_anpailiqi === "boolean" ? player.during_anpailiqi : null;
+          const lastIsLiqi = typeof player?.last_is_liqi === "boolean" ? player.last_is_liqi : null;
+          const afterLiqi = typeof player?.after_liqi === "boolean" ? player.after_liqi : null;
+          const liqiOperation = typeof player?.liqiOperation === "number" ? player.liqiOperation : null;
+          const canDiscard = typeof player?.can_discard === "boolean" ? player.can_discard : null;
+          const handTileCount = Array.isArray(player?.hand) ? player.hand.length : null;
+          const lastPaiCount = typeof player?.last_pai_count === "number" ? player.last_pai_count : null;
+          const selfRiichiHint =
+            isSelfPlayer &&
+            liqiOperation === 7 &&
+            canDiscard === false &&
+            handTileCount === 13 &&
+            (transLiqiState.activeInHierarchy === true || liqibangState.activeInHierarchy === true);
+          const isRiichiLike =
+            duringLiqi === true ||
+            duringAnpaiLiqi === true ||
+            lastIsLiqi === true ||
+            afterLiqi === true ||
+            transLiqiState.activeInHierarchy === true ||
+            liqibangState.activeInHierarchy === true ||
+            liqibangEffectsState.activeInHierarchy === true ||
+            selfRiichiHint === true;
+
+          return {
+            index,
+            absoluteSeat,
+            relativeSeat: absoluteSeatToRelativeSeat(absoluteSeat),
+            relativeSeatJp: absoluteSeatToRelativeSeatJp(absoluteSeat),
+            score,
+            duringLiqi,
+            duringAnpaiLiqi,
+            lastIsLiqi,
+            afterLiqi,
+            liqiOperation,
+            canDiscard,
+            handTileCount,
+            lastPaiCount,
+            transLiqiState,
+            liqibangState,
+            liqibangEffectsState,
+            lastPaiPresent: Boolean(lastPai),
+            lastTilePresent: Boolean(lastTile),
+            selfRiichiHint,
+            isRiichiLike
+          };
+        })
+      : [];
+    const selfRiichiState =
+      playerRiichiStates.find((player) => player.absoluteSeat === selfAbsoluteSeat) ??
+      playerRiichiStates[0] ??
+      null;
+    const activeRiichiPlayers = playerRiichiStates.filter((player) => player.isRiichiLike);
 
     let otherPlayerCursor = 0;
     let extractedPlayers = Array.isArray(players)
@@ -531,12 +705,31 @@
             lastCapturedAt: window.__mjsHuleCapture.lastEvent?.capturedAt ?? null
           }
         : null,
+      riichiCaptureMeta: window.__mjsRiichiCapture
+        ? {
+            actionNames: Array.isArray(window.__mjsRiichiCapture.actionNames)
+              ? window.__mjsRiichiCapture.actionNames.slice(0, 20)
+              : [],
+            eventCount: Array.isArray(window.__mjsRiichiCapture.events)
+              ? window.__mjsRiichiCapture.events.length
+              : 0,
+            lastCapturedAt: window.__mjsRiichiCapture.lastEvent?.capturedAt ?? null
+          }
+        : null,
       newRoundSnapshot: summarize(newRoundArgs),
       latestHuleSnapshot: summarize(latestHuleEvent),
       latestHuleSummary,
+      latestRiichiSnapshot: summarize(latestRiichiEvent),
+      latestRiichiSummary,
       recentHuleSnapshots: Array.isArray(window.__mjsHuleCapture?.events)
         ? summarize(window.__mjsHuleCapture.events.slice(-5))
         : [],
+      recentRiichiSnapshots: Array.isArray(window.__mjsRiichiCapture?.events)
+        ? summarize(window.__mjsRiichiCapture.events.slice(-5))
+        : [],
+      selfRiichiState,
+      activeRiichiPlayers,
+      playerRiichiStates,
       playerDataSummaries: playerDatas.map((item, index) => ({
         index,
         snapshot: summarize(item)

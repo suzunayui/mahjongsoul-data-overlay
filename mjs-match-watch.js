@@ -11,8 +11,10 @@ const recordSeenKeysPath = path.join(recordsDir, "seen-record-keys.json");
 const hanEventsPath = path.join(recordsDir, "han-events.json");
 const hanSeenKeysPath = path.join(recordsDir, "seen-han-keys.json");
 const hanSummaryPath = path.join(recordsDir, "han-summary.json");
+const riichiEventsPath = path.join(recordsDir, "riichi-events.json");
 const settingsPath = path.join(appDataBaseDir, "config", "settings.json");
 const pollMs = Number(process.env.MJS_MATCH_POLL_MS || 1000);
+const shouldWriteDebugOutput = !process.pkg || process.env.MJS_WRITE_DEBUG_OUTPUT === "1";
 
 async function extractMatchState(page) {
   return await page.evaluate("window.__mjsExtractMatchState()");
@@ -24,6 +26,10 @@ async function writeLatestMatchState(snapshot) {
 }
 
 async function outputDirExists() {
+  if (shouldWriteDebugOutput) {
+    await fs.mkdir(debugOutputDir, { recursive: true });
+    return true;
+  }
   try {
     const stat = await fs.stat(debugOutputDir);
     return stat.isDirectory();
@@ -43,6 +49,16 @@ function hasHuleLikeData(snapshot) {
   );
 }
 
+function hasRiichiLikeData(snapshot) {
+  return (
+    snapshot?.latestRiichiSummary != null ||
+    snapshot?.latestRiichiSnapshot != null ||
+    snapshot?.latestSelfRiichiEvent != null ||
+    (Array.isArray(snapshot?.recentRiichiSnapshots) && snapshot.recentRiichiSnapshots.length > 0) ||
+    (Array.isArray(snapshot?.riichiCaptureMeta?.actionNames) && snapshot.riichiCaptureMeta.actionNames.length > 0)
+  );
+}
+
 async function writeDebugOutput(snapshot, reason) {
   if (!(await outputDirExists())) {
     return;
@@ -55,7 +71,7 @@ async function writeDebugOutput(snapshot, reason) {
     return;
   }
 
-  if (!hasHuleLikeData(snapshot) && snapshot.inGame) {
+  if (!hasHuleLikeData(snapshot) && !hasRiichiLikeData(snapshot) && snapshot.inGame) {
     return;
   }
 
@@ -228,6 +244,87 @@ async function readJsonFile(filePath, fallback) {
 async function writeJsonFile(filePath, value) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function buildSelfRiichiEvent(snapshot) {
+  const selfRiichiState = snapshot?.selfRiichiState;
+  const hasVisibleRiichiCue =
+    selfRiichiState?.transLiqiState?.activeInHierarchy === true ||
+    selfRiichiState?.liqibangState?.activeInHierarchy === true ||
+    selfRiichiState?.selfRiichiHint === true;
+  if (!selfRiichiState || hasVisibleRiichiCue !== true) {
+    return null;
+  }
+
+  return {
+    capturedAt: snapshot.createdAt,
+    selfAccountId: snapshot.selfAccountId ?? null,
+    selfNickname: snapshot.selfNickname ?? null,
+    selfAbsoluteSeat: snapshot.selfAbsoluteSeat ?? null,
+    seat: selfRiichiState.relativeSeat ?? null,
+    seatJp: selfRiichiState.relativeSeatJp ?? null,
+    score: typeof selfRiichiState.score === "number" ? selfRiichiState.score : null,
+    liqiOperation: typeof selfRiichiState.liqiOperation === "number" ? selfRiichiState.liqiOperation : null,
+    handTileCount: typeof selfRiichiState.handTileCount === "number" ? selfRiichiState.handTileCount : null,
+    canDiscard: typeof selfRiichiState.canDiscard === "boolean" ? selfRiichiState.canDiscard : null,
+    transLiqiState: selfRiichiState.transLiqiState ?? null,
+    liqibangState: selfRiichiState.liqibangState ?? null,
+    selfRiichiHint: selfRiichiState.selfRiichiHint === true
+  };
+}
+
+function detectSelfRiichiTransition(previousState, currentState) {
+  if (!currentState) {
+    return false;
+  }
+  if (!previousState) {
+    return false;
+  }
+
+  const prevTransVisible = previousState?.transLiqiState?.activeInHierarchy === true;
+  const currTransVisible = currentState?.transLiqiState?.activeInHierarchy === true;
+  const prevStickVisible = previousState?.liqibangState?.activeInHierarchy === true;
+  const currStickVisible = currentState?.liqibangState?.activeInHierarchy === true;
+  const tileCountDropToRiichi =
+    previousState?.handTileCount === 14 &&
+    currentState?.handTileCount === 13 &&
+    previousState?.canDiscard === true &&
+    currentState?.canDiscard === false &&
+    currentState?.liqiOperation === 7;
+
+  return (
+    (prevTransVisible === false && currTransVisible === true) ||
+    (prevStickVisible === false && currStickVisible === true) ||
+    tileCountDropToRiichi
+  );
+}
+
+async function appendRiichiEvent(event) {
+  if (!event) {
+    return { written: false, reason: "no-riichi-event" };
+  }
+
+  let events = await readJsonFile(riichiEventsPath, []);
+  if (!Array.isArray(events)) {
+    events = [];
+  }
+
+  const previous = events.at(-1) ?? null;
+  const isDuplicate =
+    previous?.capturedAt === event.capturedAt &&
+    previous?.selfAccountId === event.selfAccountId &&
+    previous?.selfAbsoluteSeat === event.selfAbsoluteSeat;
+  if (isDuplicate) {
+    return { written: false, reason: "duplicate-riichi-event" };
+  }
+
+  events.push(event);
+  if (events.length > 1000) {
+    events = events.slice(-1000);
+  }
+
+  await writeJsonFile(riichiEventsPath, events);
+  return { written: true, event };
 }
 
 function normalizeHuleEvent(snapshot) {
@@ -475,16 +572,41 @@ export async function main() {
   let initializedRecordBaseline = false;
   let lastHanKey = "";
   let initializedHanBaseline = false;
+  let lastSelfRiichiLike = false;
+  let initializedSelfRiichiBaseline = false;
+  let lastSelfRiichiState = null;
 
   const saveSnapshot = async (reason) => {
     const snapshot = await extractMatchState(page);
+    const currentSelfRiichiLike = snapshot?.selfRiichiState?.isRiichiLike === true;
+    const justSelfRiichi =
+      initializedSelfRiichiBaseline &&
+      (
+        (lastSelfRiichiLike === false && currentSelfRiichiLike === true) ||
+        detectSelfRiichiTransition(lastSelfRiichiState, snapshot?.selfRiichiState)
+      );
+    const latestSelfRiichiEvent = justSelfRiichi ? buildSelfRiichiEvent(snapshot) : null;
+    const enrichedSnapshot = {
+      ...snapshot,
+      selfJustRiichi: justSelfRiichi,
+      latestSelfRiichiEvent
+    };
     const fingerprint = JSON.stringify({
-      inGame: snapshot.inGame,
-      extractedPlayers: snapshot.extractedPlayers,
-      latestHuleSnapshot: snapshot.latestHuleSnapshot,
-      recentHuleSnapshots: snapshot.recentHuleSnapshots,
-      scoreCandidates: snapshot.scoreCandidates,
-      playerSummaries: snapshot.playerSummaries.map((player) => player.snapshot)
+      inGame: enrichedSnapshot.inGame,
+      extractedPlayers: enrichedSnapshot.extractedPlayers,
+      latestHuleSnapshot: enrichedSnapshot.latestHuleSnapshot,
+      recentHuleSnapshots: enrichedSnapshot.recentHuleSnapshots,
+      latestRiichiSnapshot: enrichedSnapshot.latestRiichiSnapshot,
+      latestRiichiSummary: enrichedSnapshot.latestRiichiSummary,
+      recentRiichiSnapshots: enrichedSnapshot.recentRiichiSnapshots,
+      riichiCaptureMeta: enrichedSnapshot.riichiCaptureMeta,
+      selfRiichiState: enrichedSnapshot.selfRiichiState,
+      activeRiichiPlayers: enrichedSnapshot.activeRiichiPlayers,
+      playerRiichiStates: enrichedSnapshot.playerRiichiStates,
+      selfJustRiichi: enrichedSnapshot.selfJustRiichi,
+      latestSelfRiichiEvent: enrichedSnapshot.latestSelfRiichiEvent,
+      scoreCandidates: enrichedSnapshot.scoreCandidates,
+      playerSummaries: enrichedSnapshot.playerSummaries.map((player) => player.snapshot)
     });
 
     if (fingerprint === lastFingerprint) {
@@ -492,12 +614,23 @@ export async function main() {
     }
 
     lastFingerprint = fingerprint;
-    await writeLatestMatchState(snapshot);
-    await writeDebugOutput(snapshot, reason);
-    console.log(`[${snapshot.createdAt}] Updated latest match state (${reason}): ${latestMatchStatePath}`);
+    await writeLatestMatchState(enrichedSnapshot);
+    await writeDebugOutput(enrichedSnapshot, reason);
+    console.log(`[${enrichedSnapshot.createdAt}] Updated latest match state (${reason}): ${latestMatchStatePath}`);
 
-    if (!snapshot.inGame) {
-      const recordKey = buildRecordKey(snapshot);
+    if (!initializedSelfRiichiBaseline) {
+      initializedSelfRiichiBaseline = true;
+    } else if (latestSelfRiichiEvent) {
+      const riichiResult = await appendRiichiEvent(latestSelfRiichiEvent);
+      if (riichiResult.written) {
+        console.log(`[${enrichedSnapshot.createdAt}] Captured self riichi event: ${riichiEventsPath}`);
+      }
+    }
+    lastSelfRiichiLike = currentSelfRiichiLike;
+    lastSelfRiichiState = snapshot?.selfRiichiState ?? null;
+
+    if (!enrichedSnapshot.inGame) {
+      const recordKey = buildRecordKey(enrichedSnapshot);
 
       if (!initializedRecordBaseline) {
         lastRecordKey = recordKey !== "[]" ? recordKey : "";
@@ -506,11 +639,11 @@ export async function main() {
       }
 
       if (recordKey !== "[]" && recordKey !== lastRecordKey) {
-        const recordResult = await appendMatchRecord(snapshot);
+        const recordResult = await appendMatchRecord(enrichedSnapshot);
         if (recordResult.written) {
-          console.log(`[${snapshot.createdAt}] Appended match record: ${recordResult.filePath}`);
+          console.log(`[${enrichedSnapshot.createdAt}] Appended match record: ${recordResult.filePath}`);
           if (recordResult.summaryPath) {
-            console.log(`[${snapshot.createdAt}] Updated record summary: ${recordResult.summaryPath}`);
+            console.log(`[${enrichedSnapshot.createdAt}] Updated record summary: ${recordResult.summaryPath}`);
           }
           lastRecordKey = recordKey;
         }
