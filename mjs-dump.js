@@ -2,11 +2,12 @@ import { chromium } from "playwright";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
+  appDataBaseDir,
   debugPort,
   installHooks
 } from "./mjs-common.js";
 
-const outputDir = path.resolve("output");
+const outputDir = path.join(appDataBaseDir, "output");
 
 async function main() {
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);

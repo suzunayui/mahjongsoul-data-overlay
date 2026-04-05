@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>雀魂起動</title>
+    <link rel="stylesheet" href="./simple.css" />
+  </head>
+  <body>
+    <main class="app simple">
+      <section class="panel simple-panel">
+        <p class="eyebrow">Launch</p>
+        <h1>雀魂起動</h1>
+        <p class="lead">保存済みセッションを使って雀魂用の Chrome を起動します。</p>
+        <div class="status-line">
+          <span>状態</span>
+          <strong id="launch-status">停止中</strong>
+        </div>
+        <div class="button-row">
+          <button id="launch-start" class="primary">雀魂起動</button>
+          <button id="launch-stop">停止</button>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./launch-renderer.js"></script>
+  </body>
+  </html>

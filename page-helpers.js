@@ -3,49 +3,83 @@
     return;
   }
 
-  if (window.__mjsPageHelpersInstalled) {
+  const helperVersion = 3;
+  if ((window.__mjsPageHelpersVersion || 0) >= helperVersion) {
     return;
   }
 
   window.__mjsPageHelpersInstalled = true;
+  window.__mjsPageHelpersVersion = helperVersion;
 
   window.__mjsExtractMatchState = function () {
-    const ensureRoundHook = () => {
+    const ensureActionHooks = () => {
       if (!window.__mjsRoundCapture) {
         window.__mjsRoundCapture = {
           lastArgs: null,
           lastCapturedAt: null
         };
       }
-
-      const actionMap = window.view?.DesktopMgr?.Inst?.actionMap;
-      const entry = actionMap?.ActionNewRound;
-      if (!entry || typeof entry.method !== "function" || entry.method.__mjsWrapped) {
-        return;
+      if (!window.__mjsHuleCapture) {
+        window.__mjsHuleCapture = {
+          events: [],
+          lastEvent: null
+        };
       }
 
-      const originalMethod = entry.method;
-      const wrappedMethod = function (...args) {
-        try {
-          window.__mjsRoundCapture.lastArgs = args;
-          window.__mjsRoundCapture.lastCapturedAt = new Date().toISOString();
-        } catch {
-          // ignore
+      const actionMap = window.view?.DesktopMgr?.Inst?.actionMap;
+      const wrapAction = (actionName, onCall) => {
+        const entry = actionMap?.[actionName];
+        if (!entry || typeof entry.method !== "function" || entry.method.__mjsWrapped) {
+          return;
         }
-        return originalMethod.apply(this, args);
+
+        const originalMethod = entry.method;
+        const wrappedMethod = function (...args) {
+          try {
+            onCall(args);
+          } catch {
+            // ignore
+          }
+          return originalMethod.apply(this, args);
+        };
+
+        Object.defineProperty(wrappedMethod, "__mjsWrapped", {
+          value: true,
+          enumerable: false,
+          configurable: false,
+          writable: false
+        });
+
+        entry.method = wrappedMethod;
       };
 
-      Object.defineProperty(wrappedMethod, "__mjsWrapped", {
-        value: true,
-        enumerable: false,
-        configurable: false,
-        writable: false
+      wrapAction("ActionNewRound", (args) => {
+        window.__mjsRoundCapture.lastArgs = args;
+        window.__mjsRoundCapture.lastCapturedAt = new Date().toISOString();
       });
 
-      entry.method = wrappedMethod;
+      const huleActions = [
+        "ActionHule",
+        "ActionHuleXueZhanMid",
+        "ActionHuleXueZhanEnd"
+      ];
+      for (const actionName of huleActions) {
+        wrapAction(actionName, (args) => {
+          const event = {
+            actionName,
+            capturedAt: new Date().toISOString(),
+            args
+          };
+          window.__mjsHuleCapture.lastEvent = event;
+          window.__mjsHuleCapture.events.push(event);
+          if (window.__mjsHuleCapture.events.length > 20) {
+            window.__mjsHuleCapture.events.shift();
+          }
+        });
+      }
     };
 
-    ensureRoundHook();
+    ensureActionHooks();
 
     const safeKeys = (value) => {
       try {
@@ -194,6 +228,7 @@
 
     const desktopMgr = window.view?.DesktopMgr?.Inst ?? null;
     const actionMgr = desktopMgr?.action_runner ?? desktopMgr?._action_runner ?? null;
+    const actionMap = desktopMgr?.actionMap ?? null;
     const players =
       desktopMgr?.players ||
       desktopMgr?._players ||
@@ -246,6 +281,32 @@
           0
         )
       ) ?? null;
+    const latestHuleEvent = window.__mjsHuleCapture?.lastEvent ?? null;
+    const latestHuleSummary = (() => {
+      const payload = latestHuleEvent?.args?.[0]?.msg;
+      const hules = Array.isArray(payload?.hules) ? payload.hules : [];
+      if (hules.length === 0) {
+        return null;
+      }
+      return {
+        actionName: latestHuleEvent?.actionName ?? null,
+        capturedAt: latestHuleEvent?.capturedAt ?? null,
+        hules: hules.map((hule) => ({
+          seat: typeof hule?.seat === "number" ? hule.seat : null,
+          count: typeof hule?.count === "number" ? hule.count : null,
+          fu: typeof hule?.fu === "number" ? hule.fu : null,
+          zimo: Boolean(hule?.zimo),
+          yiman: Boolean(hule?.yiman),
+          titleId: typeof hule?.title_id === "number" ? hule.title_id : null,
+          pointRong: typeof hule?.point_rong === "number" ? hule.point_rong : null,
+          pointSum: typeof hule?.point_sum === "number" ? hule.point_sum : null,
+          dadian: typeof hule?.dadian === "number" ? hule.dadian : null
+        })),
+        oldScores: Array.isArray(payload?.old_scores) ? payload.old_scores.slice(0, 4) : [],
+        deltaScores: Array.isArray(payload?.delta_scores) ? payload.delta_scores.slice(0, 4) : [],
+        scores: Array.isArray(payload?.scores) ? payload.scores.slice(0, 4) : []
+      };
+    })();
 
     let otherPlayerCursor = 0;
     let extractedPlayers = Array.isArray(players)
@@ -399,6 +460,55 @@
 
     walk(desktopMgr, "view.DesktopMgr.Inst");
 
+    const interestingActionPattern = /hule|hora|agari|rong|ron|zimo|tsumo|liuju|roundend|end/i;
+    const actionMapSummaries = actionMap
+      ? safeKeys(actionMap)
+          .filter((key) => interestingActionPattern.test(key))
+          .map((key) => {
+            let item;
+            try {
+              item = actionMap[key];
+            } catch {
+              item = null;
+            }
+            return {
+              key,
+              snapshot: summarize(item)
+            };
+          })
+      : [];
+
+    const huleCandidates = [];
+    const collectInterestingNodes = (value, path, depth = 0, seenNodes = new WeakSet()) => {
+      if (!value || typeof value !== "object" || depth > 4 || seenNodes.has(value)) {
+        return;
+      }
+      seenNodes.add(value);
+
+      for (const key of safeKeys(value)) {
+        let item;
+        try {
+          item = value[key];
+        } catch {
+          continue;
+        }
+
+        if (interestingActionPattern.test(key)) {
+          huleCandidates.push({
+            path: `${path}.${key}`,
+            value: summarize(item)
+          });
+        }
+
+        if (item && typeof item === "object") {
+          collectInterestingNodes(item, `${path}.${key}`, depth + 1, seenNodes);
+        }
+      }
+    };
+
+    collectInterestingNodes(desktopMgr, "view.DesktopMgr.Inst");
+    collectInterestingNodes(actionMgr, "view.DesktopMgr.Inst.action_runner");
+
     return {
       createdAt: new Date().toISOString(),
       url: location.href,
@@ -413,13 +523,28 @@
             lastCapturedAt: window.__mjsRoundCapture.lastCapturedAt ?? null
           }
         : null,
+      huleCaptureMeta: window.__mjsHuleCapture
+        ? {
+            eventCount: Array.isArray(window.__mjsHuleCapture.events)
+              ? window.__mjsHuleCapture.events.length
+              : 0,
+            lastCapturedAt: window.__mjsHuleCapture.lastEvent?.capturedAt ?? null
+          }
+        : null,
       newRoundSnapshot: summarize(newRoundArgs),
+      latestHuleSnapshot: summarize(latestHuleEvent),
+      latestHuleSummary,
+      recentHuleSnapshots: Array.isArray(window.__mjsHuleCapture?.events)
+        ? summarize(window.__mjsHuleCapture.events.slice(-5))
+        : [],
       playerDataSummaries: playerDatas.map((item, index) => ({
         index,
         snapshot: summarize(item)
       })),
       extractedPlayers,
       gameEndSummary,
+      actionMapSummaries,
+      huleCandidates: huleCandidates.slice(0, 120),
       desktopMgrKeys: safeKeys(desktopMgr),
       actionMgrKeys: safeKeys(actionMgr),
       playerSummaries,

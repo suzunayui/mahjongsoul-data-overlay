@@ -9,20 +9,23 @@ const moduleDir =
   typeof __dirname === "string"
     ? __dirname
     : path.dirname(fileURLToPath(import.meta.url));
-const dataBaseDir = process.pkg ? path.dirname(process.execPath) : process.cwd();
+const dataBaseDir = path.resolve(process.env.MJS_APPDATA_DIR || ".");
 const pointsDir = path.join(dataBaseDir, "points");
 const latestMatchJsonPath = path.join(dataBaseDir, "records", "match-latest.json");
 const recordsSummaryPath = path.join(dataBaseDir, "records", "summary.json");
+const hanSummaryPath = path.join(dataBaseDir, "records", "han-summary.json");
 const overlayDir = process.pkg
   ? path.join(path.dirname(process.execPath), "overlay")
   : path.join(moduleDir, "overlay");
 const overlayHtmlPath = path.join(overlayDir, "index.html");
 const pointsHtmlPath = path.join(overlayDir, "points.html");
 const recordsHtmlPath = path.join(overlayDir, "records.html");
+const hanHtmlPath = path.join(overlayDir, "han.html");
 const overlayCssPath = path.join(overlayDir, "styles.css");
 const overlayJsPath = path.join(overlayDir, "app.js");
 const pointsJsPath = path.join(overlayDir, "points.js");
 const recordsJsPath = path.join(overlayDir, "records.js");
+const hanJsPath = path.join(overlayDir, "han.js");
 
 function sendJson(res, statusCode, body) {
   res.writeHead(statusCode, {
@@ -120,6 +123,16 @@ async function handleRequest(req, res) {
       return;
     }
 
+    if (url.pathname === "/han") {
+      const html = await readTextFile(hanHtmlPath);
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store"
+      });
+      res.end(html);
+      return;
+    }
+
     if (url.pathname === "/styles.css") {
       const css = await readTextFile(overlayCssPath);
       res.writeHead(200, {
@@ -152,6 +165,16 @@ async function handleRequest(req, res) {
 
     if (url.pathname === "/records.js") {
       const js = await readTextFile(recordsJsPath);
+      res.writeHead(200, {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "no-store"
+      });
+      res.end(js);
+      return;
+    }
+
+    if (url.pathname === "/han.js") {
+      const js = await readTextFile(hanJsPath);
       res.writeHead(200, {
         "Content-Type": "text/javascript; charset=utf-8",
         "Cache-Control": "no-store"
@@ -213,6 +236,35 @@ async function handleRequest(req, res) {
             3: 0,
             4: 0
           }
+        });
+      }
+      return;
+    }
+
+    if (url.pathname === "/han-data") {
+      try {
+        const raw = await fs.readFile(hanSummaryPath, "utf8");
+        sendJson(res, 200, JSON.parse(raw));
+      } catch {
+        sendJson(res, 200, {
+          updatedAt: null,
+          scope: "self_only",
+          counts: Object.fromEntries([
+            ["1", 0],
+            ["2", 0],
+            ["3", 0],
+            ["4", 0],
+            ["5", 0],
+            ["6", 0],
+            ["7", 0],
+            ["8", 0],
+            ["9", 0],
+            ["10", 0],
+            ["11", 0],
+            ["12", 0],
+            ["13", 0],
+            ["13+", 0]
+          ])
         });
       }
       return;

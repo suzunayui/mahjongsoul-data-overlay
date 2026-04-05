@@ -3,7 +3,9 @@ import process from "node:process";
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-export const userDataDir = path.resolve(".playwright-profile");
+export const appDataBaseDir = path.resolve(process.env.MJS_APPDATA_DIR || ".");
+export const userDataDir = path.join(appDataBaseDir, ".playwright-profile");
+export const windowStatePath = path.join(userDataDir, "window-state.json");
 export const targetUrl = process.env.MJS_URL || "https://game.mahjongsoul.com/";
 export const headless = process.env.HEADLESS === "1";
 export const debugPort = Number(process.env.CHROME_DEBUG_PORT || 9222);
@@ -13,6 +15,10 @@ export const rankHintPattern =
   /rank|level|pt|point|score|dan|\u521d\u5fc3|\u96c0\u58eb|\u96c0\u5091|\u96c0\u8c6a|\u96c0\u8056|\u9b42\u5929|\u6bb5\u4f4d/i;
 export const rankAssetPattern =
   /\/(?:sanma|sima)_(?:fish|queshi|quejie|quehao|quesheng|huntian)\.png/i;
+
+export function resolveAppDataPath(...parts) {
+  return path.join(appDataBaseDir, ...parts);
+}
 
 export function isInterestingTextPayload(text) {
   return /rank|level|pt|point|score|dan|account|profile/i.test(text);

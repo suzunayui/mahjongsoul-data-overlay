@@ -2,11 +2,16 @@ import { chromium } from "playwright";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { debugPort, installHooks } from "./mjs-common.js";
+import { appDataBaseDir, debugPort, installHooks } from "./mjs-common.js";
 
-const recordsDir = path.resolve("records");
+const recordsDir = path.join(appDataBaseDir, "records");
+const debugOutputDir = path.join(appDataBaseDir, "output");
 const latestMatchStatePath = path.join(recordsDir, "match-latest.json");
 const recordSeenKeysPath = path.join(recordsDir, "seen-record-keys.json");
+const hanEventsPath = path.join(recordsDir, "han-events.json");
+const hanSeenKeysPath = path.join(recordsDir, "seen-han-keys.json");
+const hanSummaryPath = path.join(recordsDir, "han-summary.json");
+const settingsPath = path.join(appDataBaseDir, "config", "settings.json");
 const pollMs = Number(process.env.MJS_MATCH_POLL_MS || 1000);
 
 async function extractMatchState(page) {
@@ -16,6 +21,47 @@ async function extractMatchState(page) {
 async function writeLatestMatchState(snapshot) {
   await fs.mkdir(recordsDir, { recursive: true });
   await fs.writeFile(latestMatchStatePath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+}
+
+async function outputDirExists() {
+  try {
+    const stat = await fs.stat(debugOutputDir);
+    return stat.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function createSafeTimestamp(isoString) {
+  return isoString.replaceAll(":", "-").replaceAll(".", "-");
+}
+
+function hasHuleLikeData(snapshot) {
+  return (
+    (Array.isArray(snapshot.huleCandidates) && snapshot.huleCandidates.length > 0) ||
+    (Array.isArray(snapshot.actionMapSummaries) && snapshot.actionMapSummaries.length > 0)
+  );
+}
+
+async function writeDebugOutput(snapshot, reason) {
+  if (!(await outputDirExists())) {
+    return;
+  }
+
+  const latestDebugPath = path.join(debugOutputDir, "match-debug-latest.json");
+  await fs.writeFile(latestDebugPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+
+  if (reason === "initial") {
+    return;
+  }
+
+  if (!hasHuleLikeData(snapshot) && snapshot.inGame) {
+    return;
+  }
+
+  const timestamp = createSafeTimestamp(snapshot.createdAt);
+  const filePath = path.join(debugOutputDir, `match-debug-${timestamp}.json`);
+  await fs.writeFile(filePath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
 }
 
 function formatTimestampParts(isoString) {
@@ -171,6 +217,232 @@ async function dedupeDailyRecordFiles() {
   }
 }
 
+async function readJsonFile(filePath, fallback) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+async function writeJsonFile(filePath, value) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function normalizeHuleEvent(snapshot) {
+  const summary = snapshot?.latestHuleSummary;
+  if (summary && Array.isArray(summary.hules) && summary.hules.length > 0) {
+    return {
+      capturedAt: summary.capturedAt ?? snapshot.createdAt,
+      actionName: summary.actionName ?? null,
+      selfAbsoluteSeat: snapshot.selfAbsoluteSeat ?? null,
+      hules: summary.hules.map((hule) => ({
+        seat: typeof hule?.seat === "number" ? hule.seat : null,
+        count: typeof hule?.count === "number" ? hule.count : null,
+        fu: typeof hule?.fu === "number" ? hule.fu : null,
+        zimo: Boolean(hule?.zimo),
+        yiman: Boolean(hule?.yiman),
+        titleId: typeof hule?.titleId === "number" ? hule.titleId : null,
+        pointRong: typeof hule?.pointRong === "number" ? hule.pointRong : null,
+        pointSum: typeof hule?.pointSum === "number" ? hule.pointSum : null,
+        dadian: typeof hule?.dadian === "number" ? hule.dadian : null,
+        fans: []
+      })),
+      oldScores: Array.isArray(summary.oldScores) ? summary.oldScores : [],
+      deltaScores: Array.isArray(summary.deltaScores) ? summary.deltaScores : [],
+      scores: Array.isArray(summary.scores) ? summary.scores : []
+    };
+  }
+
+  const source = snapshot?.latestHuleSnapshot;
+  const payload = source?.args?.[0]?.msg;
+  const hules = Array.isArray(payload?.hules) ? payload.hules : [];
+  if (!source || hules.length === 0) {
+    return null;
+  }
+
+  return {
+    capturedAt: source.capturedAt ?? snapshot.createdAt,
+    actionName: source.actionName ?? null,
+    selfAbsoluteSeat: snapshot.selfAbsoluteSeat ?? null,
+    hules: hules.map((hule) => ({
+      seat: typeof hule?.seat === "number" ? hule.seat : null,
+      count: typeof hule?.count === "number" ? hule.count : null,
+      fu: typeof hule?.fu === "number" ? hule.fu : null,
+      zimo: Boolean(hule?.zimo),
+      yiman: Boolean(hule?.yiman),
+      titleId: typeof hule?.title_id === "number" ? hule.title_id : null,
+      pointRong: typeof hule?.point_rong === "number" ? hule.point_rong : null,
+      pointSum: typeof hule?.point_sum === "number" ? hule.point_sum : null,
+      dadian: typeof hule?.dadian === "number" ? hule.dadian : null,
+      fans: Array.isArray(hule?.fans)
+        ? hule.fans.map((fan) => ({
+            id: typeof fan?.id === "number" ? fan.id : null,
+            val: typeof fan?.val === "number" ? fan.val : null
+          }))
+        : []
+    })),
+    oldScores: Array.isArray(payload?.old_scores) ? payload.old_scores : [],
+    deltaScores: Array.isArray(payload?.delta_scores) ? payload.delta_scores : [],
+    scores: Array.isArray(payload?.scores) ? payload.scores : []
+  };
+}
+
+function buildHanEventKey(event) {
+  return JSON.stringify({
+    capturedAt: event.capturedAt,
+    actionName: event.actionName,
+    hules: event.hules.map((hule) => ({
+      seat: hule.seat,
+      count: hule.count,
+      fu: hule.fu,
+      zimo: hule.zimo,
+      yiman: hule.yiman,
+      titleId: hule.titleId,
+      pointRong: hule.pointRong,
+      pointSum: hule.pointSum
+    }))
+  });
+}
+
+function inferEffectiveHan(hule) {
+  const count = Number(hule?.count);
+  if (!Number.isFinite(count) || count <= 0) {
+    return 0;
+  }
+
+  if (hule?.yiman) {
+    return count * 13;
+  }
+
+  const pointRong = Number(hule?.pointRong);
+  const pointSum = Number(hule?.pointSum);
+  const dadian = Number(hule?.dadian);
+
+  // Fallback for older snapshots where yiman was not persisted.
+  // Yakuman-class hands have final values far above normal han-based hands.
+  if (
+    count <= 4 &&
+    (
+      (Number.isFinite(pointRong) && pointRong >= 48000) ||
+      (Number.isFinite(pointSum) && pointSum >= 32000) ||
+      (Number.isFinite(dadian) && dadian >= 32000)
+    )
+  ) {
+    return count * 13;
+  }
+
+  return count;
+}
+
+async function appendHanEvent(snapshot) {
+  const event = normalizeHuleEvent(snapshot);
+  if (!event) {
+    return { written: false, reason: "no-hule-event" };
+  }
+
+  await fs.mkdir(recordsDir, { recursive: true });
+
+  let seenKeys = await readJsonFile(hanSeenKeysPath, []);
+  if (!Array.isArray(seenKeys)) {
+    seenKeys = [];
+  }
+
+  const key = buildHanEventKey(event);
+  if (seenKeys.includes(key)) {
+    return { written: false, reason: "duplicate-hule-event" };
+  }
+
+  let events = await readJsonFile(hanEventsPath, []);
+  if (!Array.isArray(events)) {
+    events = [];
+  }
+
+  events.push(event);
+  if (events.length > 1000) {
+    events = events.slice(-1000);
+  }
+
+  seenKeys.push(key);
+  if (seenKeys.length > 1000) {
+    seenKeys = seenKeys.slice(-1000);
+  }
+
+  await writeJsonFile(hanEventsPath, events);
+  await writeJsonFile(hanSeenKeysPath, seenKeys);
+  return { written: true, event };
+}
+
+async function rebuildHanSummary() {
+  const settings = await readJsonFile(settingsPath, { hanCountScope: "all_players" });
+  const events = await readJsonFile(hanEventsPath, []);
+  const scope =
+    settings?.hanCountScope === "all_players" || settings?.hanCountScope === "self_with_ron_loss"
+      ? settings.hanCountScope
+      : "self_only";
+  const counts = {};
+  let totalHan = 0;
+
+  for (let han = 1; han <= 13; han += 1) {
+    counts[String(han)] = 0;
+  }
+  counts["13+"] = 0;
+
+  for (const event of Array.isArray(events) ? events : []) {
+    const selfSeat = typeof event?.selfAbsoluteSeat === "number" ? event.selfAbsoluteSeat : null;
+    const hules = Array.isArray(event?.hules) ? event.hules : [];
+    const deltaScores = Array.isArray(event?.deltaScores) ? event.deltaScores : [];
+    const selfDelta =
+      selfSeat != null && Number.isFinite(Number(deltaScores[selfSeat])) ? Number(deltaScores[selfSeat]) : null;
+
+    for (const hule of hules) {
+      const effectiveHan = inferEffectiveHan(hule);
+      if (effectiveHan <= 0) {
+        continue;
+      }
+
+      if (scope === "all_players") {
+        totalHan += effectiveHan;
+      } else if (scope === "self_only") {
+        if (selfSeat == null || hule?.seat !== selfSeat) {
+          continue;
+        }
+        totalHan += effectiveHan;
+      } else if (scope === "self_with_ron_loss") {
+        if (selfSeat == null) {
+          continue;
+        }
+        if (hule?.seat === selfSeat) {
+          totalHan += effectiveHan;
+        } else if (hule?.zimo === false && selfDelta != null && selfDelta < 0) {
+          totalHan -= effectiveHan;
+        } else {
+          continue;
+        }
+      } else {
+        continue;
+      }
+
+      if (effectiveHan >= 13) {
+        counts["13+"] += 1;
+      } else {
+        counts[String(effectiveHan)] += 1;
+      }
+    }
+  }
+
+  const summary = {
+    updatedAt: new Date().toISOString(),
+    scope,
+    totalHan,
+    counts
+  };
+
+  await writeJsonFile(hanSummaryPath, summary);
+  return summary;
+}
+
 export async function main() {
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
   const context = browser.contexts()[0];
@@ -194,16 +466,23 @@ export async function main() {
   console.log(`Watching match state every ${pollMs}ms`);
   console.log(`Latest match state: ${latestMatchStatePath}`);
   console.log(`Match records: ${recordsDir}`);
+  if (await outputDirExists()) {
+    console.log(`Debug output: ${debugOutputDir}`);
+  }
 
   let lastFingerprint = "";
   let lastRecordKey = "";
   let initializedRecordBaseline = false;
+  let lastHanKey = "";
+  let initializedHanBaseline = false;
 
   const saveSnapshot = async (reason) => {
     const snapshot = await extractMatchState(page);
     const fingerprint = JSON.stringify({
       inGame: snapshot.inGame,
       extractedPlayers: snapshot.extractedPlayers,
+      latestHuleSnapshot: snapshot.latestHuleSnapshot,
+      recentHuleSnapshots: snapshot.recentHuleSnapshots,
       scoreCandidates: snapshot.scoreCandidates,
       playerSummaries: snapshot.playerSummaries.map((player) => player.snapshot)
     });
@@ -214,6 +493,7 @@ export async function main() {
 
     lastFingerprint = fingerprint;
     await writeLatestMatchState(snapshot);
+    await writeDebugOutput(snapshot, reason);
     console.log(`[${snapshot.createdAt}] Updated latest match state (${reason}): ${latestMatchStatePath}`);
 
     if (!snapshot.inGame) {
@@ -241,11 +521,33 @@ export async function main() {
   };
 
   await saveSnapshot("initial");
+  await rebuildHanSummary();
 
   const interval = setInterval(() => {
-    saveSnapshot("poll").catch((error) => {
-      console.error(error);
-    });
+    saveSnapshot("poll")
+      .then(async () => {
+        const snapshot = await readJsonFile(latestMatchStatePath, null);
+        if (snapshot?.latestHuleSummary || snapshot?.latestHuleSnapshot) {
+          const currentHanEvent = normalizeHuleEvent(snapshot);
+          const currentHanKey = currentHanEvent ? buildHanEventKey(currentHanEvent) : "";
+
+          if (!initializedHanBaseline) {
+            lastHanKey = currentHanKey;
+            initializedHanBaseline = true;
+          } else if (currentHanKey && currentHanKey !== lastHanKey) {
+            const hanResult = await appendHanEvent(snapshot);
+            if (hanResult.written) {
+              lastHanKey = currentHanKey;
+            }
+          }
+        } else if (!initializedHanBaseline) {
+          initializedHanBaseline = true;
+        }
+        await rebuildHanSummary();
+      })
+      .catch((error) => {
+        console.error(error);
+      });
   }, pollMs);
 
   const shutdown = async () => {

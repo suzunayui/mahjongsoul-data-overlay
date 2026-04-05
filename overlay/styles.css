@@ -62,6 +62,35 @@ body {
   margin-top: 6px;
 }
 
+.han-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(7, auto);
+  gap: 6px 8px;
+  width: fit-content;
+}
+
+.han-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+}
+
+.han-chip strong {
+  color: #8dd3ff;
+  font-weight: 700;
+}
+
+.han-chip em {
+  color: #ffffff;
+  font-style: normal;
+}
+
 .points-card {
   padding: 14px 18px;
 }

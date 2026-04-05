@@ -2,7 +2,12 @@
 node_modules/
 points/
 records/
+output/
+config/
 .pkg-build/
 dist/
+electron-dist/
+release/
+*.log
 collect-stdout.txt
 collect-stderr.txt

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
+  appDataBaseDir,
   collectRuntimeHints,
   collectVisibleHints,
   debugPort,
@@ -15,7 +16,7 @@ import {
   summarizeEntry
 } from "./mjs-common.js";
 
-const pointsDir = path.resolve("points");
+const pointsDir = path.join(appDataBaseDir, "points");
 const pollMs = Number(process.env.MJS_POLL_MS || 2000);
 
 async function extractProfileDataForPkg(page) {
