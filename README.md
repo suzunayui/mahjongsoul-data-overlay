@@ -1,14 +1,11 @@
 # mahjongsoul-data-overlay
 
-![mahjongsoul-data-overlay screenshot](2026-04-05.png)
-
 [![YouTube demo](https://img.youtube.com/vi/Jx6_zLfGgQk/maxresdefault.jpg)](https://www.youtube.com/watch?v=Jx6_zLfGgQk)
 
-動画版: <https://www.youtube.com/watch?v=Jx6_zLfGgQk>
+動画リンク: <https://www.youtube.com/watch?v=Jx6_zLfGgQk>
 
 ブラウザ版の雀魂からランク情報や対局中の点数を読み取り、OBS のブラウザソースで表示するためのツールです。
-
-通常利用では `Node.js` は不要です。  
+ 
 配布版は GitHub Releases からダウンロードしてください。
 
 - ダウンロード先: <https://github.com/suzunayui/mahjongsoul-data-overlay/releases/tag/mahjongsoul-data-overlay-20260405>
