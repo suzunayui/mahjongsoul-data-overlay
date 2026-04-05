@@ -35,18 +35,7 @@
    初回だけログイン操作が必要ですが、セッションが残っていれば 2 回目以降は自動ログインします
 3. 開いた Chrome で雀魂を使います
 4. `mahjongsoul-collect.exe` を起動します
-5. `html` フォルダが開くので、その中の HTML ファイル 3 つを OBS にドラッグ&ドロップします
-
-使うファイル:
-
-- `mahjongsoul-launch.exe`
-- `mahjongsoul-collect.exe`
-
-ローカルファイル版を使う場合:
-
-- `html/obs-rank.html`
-- `html/obs-points.html`
-- `html/obs-records.html`
+5. `html` フォルダが開くので、`obs-rank.html` と `obs-points.html` と `obs-records.html` を OBS にドラッグ&ドロップします
 
 注意:
 
