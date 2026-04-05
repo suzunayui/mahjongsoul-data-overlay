@@ -27,7 +27,7 @@
 
 ### 手順
 
-1. GitHub Releases から配布ファイルをダウンロードします
+1. [GitHub Releases](https://github.com/suzunayui/mahjongsoul-data-overlay/releases/tag/mahjongsoul-data-overlay-20260405) から配布ファイルをダウンロードします
 2. 展開したフォルダの中にある `mahjongsoul-launch.exe` を起動します  
    初回だけログイン操作が必要ですが、セッションが残っていれば 2 回目以降は自動ログインします
 3. 開いた Chrome で雀魂を使います
