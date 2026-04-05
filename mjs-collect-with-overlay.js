@@ -42,7 +42,38 @@ function spawnNode(scriptPath, exeBaseName, label) {
   return child;
 }
 
+function getOverlayHtmlDir() {
+  return process.pkg ? path.join(path.dirname(process.execPath), "html") : workdir;
+}
+
+function openOverlayHtmlDir() {
+  const htmlDir = getOverlayHtmlDir();
+  const htmlFiles = ["obs-rank.html", "obs-points.html", "obs-records.html"];
+  const fileList = htmlFiles.map((name) => path.join(htmlDir, name));
+
+  console.log(`OBS overlay HTML folder: ${htmlDir}`);
+  for (const filePath of fileList) {
+    console.log(`- ${filePath}`);
+  }
+
+  if (!process.pkg) {
+    return;
+  }
+
+  try {
+    const child = spawn("explorer.exe", [htmlDir], {
+      detached: true,
+      stdio: "ignore"
+    });
+    child.unref();
+  } catch (error) {
+    console.error("Failed to open overlay HTML folder:", error);
+  }
+}
+
 export async function main() {
+  openOverlayHtmlDir();
+
   if (process.pkg) {
     await overlayMain();
     const wrap = (label, task) =>

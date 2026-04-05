@@ -21,12 +21,6 @@
 - 対局結果の記録
 - 自分の `1位-2位-3位-4位` 回数表示
 
-## OBS 用 URL
-
-- ランク表示: `http://127.0.0.1:4173/rank`
-- 点数表示: `http://127.0.0.1:4173/points`
-- 順位集計: `http://127.0.0.1:4173/records`
-
 ## 使い方
 
 ### 必要なもの
@@ -37,20 +31,28 @@
 ### 手順
 
 1. GitHub Releases から配布ファイルをダウンロードします
-2. 展開したフォルダの中にある `mahjongsoul-launch.exe` を起動します
+2. 展開したフォルダの中にある `mahjongsoul-launch.exe` を起動します  
+   初回だけログイン操作が必要ですが、セッションが残っていれば 2 回目以降は自動ログインします
 3. 開いた Chrome で雀魂を使います
 4. `mahjongsoul-collect.exe` を起動します
-5. OBS のブラウザソースに URL を設定します
+5. `html` フォルダが開くので、その中の HTML ファイル 3 つを OBS にドラッグ&ドロップします
 
 使うファイル:
 
 - `mahjongsoul-launch.exe`
 - `mahjongsoul-collect.exe`
 
+ローカルファイル版を使う場合:
+
+- `html/obs-rank.html`
+- `html/obs-points.html`
+- `html/obs-records.html`
+
 注意:
 
 - `mahjongsoul-collect.exe` は配布フォルダごとそのまま使ってください
 - `overlay` フォルダも必要です
+- `html` フォルダも必要です
 - `launch.exe` を先に起動してから `collect.exe` を起動してください
 
 ## 保存されるデータ
@@ -105,7 +107,7 @@ npm.cmd run build:exe:collect
 
 ## 補足
 
-- このツールは、起動中のブラウザがすでに持っている表示データや内部状態を読み取る方式です
+- このツールは、起動中のブラウザがすでに持っている表示データを読み取る方式です
 - 雀魂サーバーに対して独自の API を追加で叩くことはしていません
 - ログイン状態は `.playwright-profile` に保存されます
 - セッションが切れた場合は、再度手動ログインが必要です
