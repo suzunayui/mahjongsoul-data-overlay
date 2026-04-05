@@ -7,6 +7,7 @@ import { build } from "esbuild";
 const projectRoot = process.cwd();
 const buildDir = path.join(projectRoot, ".pkg-build");
 const distDir = path.join(projectRoot, "dist");
+const htmlSrcDir = path.join(projectRoot, "html");
 const htmlDistDir = path.join(distDir, "html");
 const overlaySrcDir = path.join(projectRoot, "overlay");
 const overlayDistDir = path.join(distDir, "overlay");
@@ -15,7 +16,8 @@ const pageHelpersDistPath = path.join(distDir, "page-helpers.js");
 const obsWrapperFiles = [
   "obs-rank.html",
   "obs-points.html",
-  "obs-records.html"
+  "obs-records.html",
+  "obs-han.html"
 ];
 
 const targets = {
@@ -103,7 +105,7 @@ async function main() {
   await fs.copyFile(pageHelpersSrcPath, pageHelpersDistPath);
   await fs.mkdir(htmlDistDir, { recursive: true });
   for (const fileName of obsWrapperFiles) {
-    await fs.copyFile(path.join(projectRoot, fileName), path.join(htmlDistDir, fileName));
+    await fs.copyFile(path.join(htmlSrcDir, fileName), path.join(htmlDistDir, fileName));
   }
 
   if (requested === "all") {

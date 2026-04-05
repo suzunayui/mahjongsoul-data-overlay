@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>データ取得</title>
+    <link rel="stylesheet" href="./simple.css" />
+  </head>
+  <body>
+    <main class="app simple">
+      <section class="panel simple-panel">
+        <p class="eyebrow">Collect</p>
+        <h1>データ取得</h1>
+        <div class="tab-row">
+          <button class="tab-button is-active" data-tab-target="collect">データ取得</button>
+          <button class="tab-button" data-tab-target="settings">設定</button>
+        </div>
+
+        <section class="tab-panel is-active" data-tab-panel="collect">
+          <p class="lead">ランク、点数、順位、飜数を取得して OBS 用 HTML の更新を続けます。</p>
+          <div class="status-line">
+            <span>状態</span>
+            <strong id="collect-status">停止中</strong>
+          </div>
+          <p class="hint" id="html-dir"></p>
+          <div class="button-row">
+            <button id="collect-start" class="primary">データ取得開始</button>
+            <button id="collect-stop">停止</button>
+          </div>
+          <div class="button-row">
+            <button id="open-html">OBS 用フォルダを開く</button>
+          </div>
+        </section>
+
+        <section class="tab-panel" data-tab-panel="settings">
+          <p class="lead">飜数の集計方法と、記録データのリセットを設定します。</p>
+          <div class="settings-card">
+            <p class="settings-label">飜数の数え方</p>
+            <label class="radio-row">
+              <input type="radio" name="han-count-scope" value="all_players" />
+              <span>飜数は4人全員分を数える</span>
+            </label>
+            <label class="radio-row">
+              <input type="radio" name="han-count-scope" value="self_only" />
+              <span>飜数は自分の分だけを数える</span>
+            </label>
+            <label class="radio-row">
+              <input type="radio" name="han-count-scope" value="self_with_ron_loss" />
+              <span>飜数は自分の分だけを数えて、自分がロンされたらその分減る</span>
+            </label>
+          </div>
+          <div class="button-row">
+            <button id="save-settings" class="primary">設定を保存</button>
+            <button id="reset-han">飜数をリセットする</button>
+          </div>
+          <div class="button-row">
+            <button id="reset-records">順位をリセットする</button>
+            <button id="reset-points">段位ポイント増減をリセットする</button>
+          </div>
+          <p class="hint" id="settings-status"></p>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="./collect-renderer.js"></script>
+  </body>
+</html>

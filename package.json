@@ -1,8 +1,9 @@
 {
   "name": "mahjongsoul-data-overlay",
-  "version": "0.1.0",
+  "version": "2026.4.5",
   "private": true,
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
     "inspect": "node inspect-mahjongsoul.js",
     "mjs": "node mjs-launch.js",
@@ -12,6 +13,15 @@
     "mjs:match": "node mjs-match-watch.js",
     "mjs:dump": "node mjs-dump.js",
     "overlay": "node overlay-server.js",
+    "electron:start": "electron .",
+    "electron:start:launch": "electron electron/launch-main.js",
+    "electron:start:collect": "electron electron/collect-main.js",
+    "build:installer:launch": "node build-electron-installer.mjs launch",
+    "build:installer:collect": "node build-electron-installer.mjs collect",
+    "build:installer": "node build-electron-installer.mjs all",
+    "build:electron:launch": "node build-electron.mjs launch",
+    "build:electron:collect": "node build-electron.mjs collect",
+    "build:electron": "node build-electron.mjs all",
     "build:exe:launch": "node build-exe.mjs launch",
     "build:exe:collect": "node build-exe.mjs collect",
     "build:exe": "node build-exe.mjs all"
@@ -20,6 +30,9 @@
     "playwright": "^1.59.1"
   },
   "devDependencies": {
+    "@electron/packager": "^19.1.0",
+    "electron": "^37.6.0",
+    "electron-builder": "^26.8.1",
     "esbuild": "^0.28.0",
     "pkg": "^5.8.1"
   },

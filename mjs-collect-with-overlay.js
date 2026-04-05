@@ -1,14 +1,19 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { main as overlayMain } from "./overlay-server.js";
 import { main as collectMain } from "./mjs-collect.js";
 import { main as matchMain } from "./mjs-match-watch.js";
 
-const workdir = process.cwd();
-const overlayScript = path.join(workdir, "overlay-server.js");
-const collectScript = path.join(workdir, "mjs-collect.js");
-const matchScript = path.join(workdir, "mjs-match-watch.js");
+const moduleDir =
+  typeof __dirname === "string"
+    ? __dirname
+    : path.dirname(fileURLToPath(import.meta.url));
+const workdir = process.env.MJS_APPDATA_DIR ? path.resolve(process.env.MJS_APPDATA_DIR) : process.cwd();
+const overlayScript = path.join(moduleDir, "overlay-server.js");
+const collectScript = path.join(moduleDir, "mjs-collect.js");
+const matchScript = path.join(moduleDir, "mjs-match-watch.js");
 
 function resolveSpawnTarget(scriptPath, exeBaseName) {
   if (process.pkg) {
@@ -28,7 +33,8 @@ function spawnNode(scriptPath, exeBaseName, label) {
   const target = resolveSpawnTarget(scriptPath, exeBaseName);
   const child = spawn(target.command, target.args, {
     cwd: workdir,
-    stdio: "inherit"
+    stdio: "inherit",
+    env: process.env
   });
 
   child.on("exit", (code, signal) => {
@@ -43,12 +49,12 @@ function spawnNode(scriptPath, exeBaseName, label) {
 }
 
 function getOverlayHtmlDir() {
-  return process.pkg ? path.join(path.dirname(process.execPath), "html") : workdir;
+  return process.pkg ? path.join(path.dirname(process.execPath), "html") : path.join(moduleDir, "html");
 }
 
 function openOverlayHtmlDir() {
   const htmlDir = getOverlayHtmlDir();
-  const htmlFiles = ["obs-rank.html", "obs-points.html", "obs-records.html"];
+  const htmlFiles = ["obs-rank.html", "obs-points.html", "obs-records.html", "obs-han.html"];
   const fileList = htmlFiles.map((name) => path.join(htmlDir, name));
 
   console.log(`OBS overlay HTML folder: ${htmlDir}`);

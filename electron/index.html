@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>雀魂オーバーレイ</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="panel hero">
+        <div>
+          <p class="eyebrow">Mahjongsoul Data Overlay</p>
+          <h1>雀魂オーバーレイ</h1>
+          <p class="lead">
+            雀魂起動、データ取得、OBS 用 HTML フォルダ表示を 1 つの画面から操作できます。
+          </p>
+        </div>
+        <div class="status-grid">
+          <div class="status-card">
+            <span class="status-label">雀魂起動</span>
+            <strong id="launch-status">停止中</strong>
+          </div>
+          <div class="status-card">
+            <span class="status-label">データ取得</span>
+            <strong id="collect-status">停止中</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel actions">
+        <div class="action-group">
+          <h2>操作</h2>
+          <div class="button-row">
+            <button id="launch-start" class="primary">雀魂起動</button>
+            <button id="launch-stop">雀魂起動を停止</button>
+          </div>
+          <div class="button-row">
+            <button id="collect-start" class="primary">データ取得開始</button>
+            <button id="collect-stop">データ取得停止</button>
+          </div>
+          <div class="button-row">
+            <button id="open-html">OBS 用フォルダを開く</button>
+          </div>
+        </div>
+
+        <div class="action-group">
+          <h2>OBS プレビュー</h2>
+          <div class="button-row compact">
+            <button data-open-overlay="rank">rank をブラウザで開く</button>
+            <button data-open-overlay="points">points をブラウザで開く</button>
+            <button data-open-overlay="records">records をブラウザで開く</button>
+          </div>
+          <p class="hint" id="html-dir"></p>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./renderer.js"></script>
+  </body>
+  </html>
