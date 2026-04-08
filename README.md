@@ -21,7 +21,7 @@
 - OBS（OBS連携を使う場合。OBS WebSocket を有効化）
 
 ## 使い方（単一EXE版）
-1. Releases から `mahjongsoul-data-overlay-setup-<version>.exe` をダウンロード
+1. [Releases](https://github.com/suzunayui/mahjongsoul-data-overlay/releases) から `mahjongsoul-data-overlay-setup-<version>.exe` をダウンロード
 2. インストールして `mahjongsoul-data-overlay` を起動
 3. アプリの `開始` タブで次の順に操作
 `1. 雀魂起動` → `2. データ取得開始` → `3. OBS連携` → `4. ソース追加`
