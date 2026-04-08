@@ -105,7 +105,6 @@ body {
 :root[data-theme="custom"] .label,
 :root[data-theme="custom"] .points-label,
 :root[data-theme="custom"] .points-score,
-:root[data-theme="custom"] .delta,
 :root[data-theme="custom"] .subtle {
   color: var(--custom-text, #f7f4eb) !important;
 }
@@ -116,13 +115,25 @@ body {
 }
 
 :root[data-theme="custom"] .points-score-top {
-  color: #7fc3ff !important;
-  text-shadow: 0 0 12px rgba(79, 160, 255, 0.24);
+  color: #2f6de0 !important;
+  text-shadow: 0 0 10px rgba(47, 109, 224, 0.2);
 }
 
 :root[data-theme="custom"] .points-score-bottom {
-  color: #ff8e8e !important;
-  text-shadow: 0 0 10px rgba(255, 108, 108, 0.2);
+  color: #d84545 !important;
+  text-shadow: 0 0 10px rgba(216, 69, 69, 0.2);
+}
+
+:root[data-theme="custom"] .delta-positive {
+  color: #2f6de0 !important;
+}
+
+:root[data-theme="custom"] .delta-negative {
+  color: #d84545 !important;
+}
+
+:root[data-theme="custom"] .delta-neutral {
+  color: var(--custom-text, #f7f4eb) !important;
 }
 
 .label {
@@ -218,13 +229,13 @@ body {
 }
 
 .points-score-top {
-  color: #7fc3ff;
-  text-shadow: 0 0 12px rgba(79, 160, 255, 0.24);
+  color: #2f6de0;
+  text-shadow: 0 0 10px rgba(47, 109, 224, 0.2);
 }
 
 .points-score-bottom {
-  color: #ff8e8e;
-  text-shadow: 0 0 10px rgba(255, 108, 108, 0.2);
+  color: #d84545;
+  text-shadow: 0 0 10px rgba(216, 69, 69, 0.2);
 }
 
 .points-top,
