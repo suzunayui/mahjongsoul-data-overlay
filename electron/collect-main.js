@@ -373,6 +373,29 @@ function getDateKey() {
   return `${year}-${month}-${day}`;
 }
 
+async function findLatestPointsFileBySuffix(suffix) {
+  try {
+    const entries = await fs.promises.readdir(pointsDir, { withFileTypes: true });
+    const files = entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(suffix))
+      .map((entry) => path.join(pointsDir, entry.name));
+    if (files.length === 0) {
+      return null;
+    }
+
+    const stats = await Promise.all(
+      files.map(async (filePath) => ({
+        filePath,
+        stat: await fs.promises.stat(filePath)
+      }))
+    );
+    stats.sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
+    return stats[0].filePath;
+  } catch {
+    return null;
+  }
+}
+
 function listSystemFonts() {
   if (Array.isArray(cachedSystemFonts)) {
     return Promise.resolve(cachedSystemFonts);
@@ -1119,18 +1142,34 @@ ipcMain.handle("records:reset", async () => {
 
 ipcMain.handle("points:reset", async () => {
   const dateKey = getDateKey();
-  const startPath = path.join(pointsDir, `${dateKey}-start.json`);
-  const latestPath = path.join(pointsDir, `${dateKey}-latest-change.json`);
-  const latest = await readJsonFile(latestPath, null);
-  const start = await readJsonFile(startPath, null);
+  const todayStartPath = path.join(pointsDir, `${dateKey}-start.json`);
+  const todayLatestPath = path.join(pointsDir, `${dateKey}-latest-change.json`);
+  const todayLatest = await readJsonFile(todayLatestPath, null);
+  const todayStart = await readJsonFile(todayStartPath, null);
+
+  let startPath = todayStartPath;
+  let latestPath = todayLatestPath;
+  let latest = todayLatest;
+  let start = todayStart;
+
+  if (!latest && !start) {
+    const latestAnyLatestPath = await findLatestPointsFileBySuffix("-latest-change.json");
+    const latestAnyStartPath = await findLatestPointsFileBySuffix("-start.json");
+    latestPath = latestAnyLatestPath || todayLatestPath;
+    startPath = latestAnyStartPath || todayStartPath;
+    latest = await readJsonFile(latestPath, null);
+    start = await readJsonFile(startPath, null);
+  }
+
   const nextBase = latest || start;
 
   if (!nextBase) {
     return { ok: false, message: "表示に使える段位ポイントデータがありません" };
   }
 
+  await fs.promises.mkdir(pointsDir, { recursive: true });
   await writeJsonFile(startPath, nextBase);
-  if (!latest) {
+  if (!latest || latestPath === todayLatestPath) {
     await writeJsonFile(latestPath, nextBase);
   }
   return { ok: true };
