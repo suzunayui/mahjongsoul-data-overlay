@@ -54,6 +54,7 @@ const defaultSettings = {
     enabled: false,
     websocketUrl: "ws://127.0.0.1:4455",
     password: "",
+    mediaSourceNames: [],
     mediaSourceName: ""
   }
 };
@@ -238,6 +239,18 @@ function getChildEnv() {
 
 function normalizeObsIntegrationSettings(value) {
   const source = value && typeof value === "object" ? value : {};
+  const mediaSourceNamesRaw = Array.isArray(source.mediaSourceNames)
+    ? source.mediaSourceNames
+    : typeof source.mediaSourceName === "string" && source.mediaSourceName.trim().length > 0
+      ? [source.mediaSourceName]
+      : [];
+  const mediaSourceNames = Array.from(
+    new Set(
+      mediaSourceNamesRaw
+        .map((name) => (typeof name === "string" ? name.trim() : ""))
+        .filter((name) => name.length > 0)
+    )
+  );
   return {
     enabled: source.enabled === true,
     websocketUrl:
@@ -245,7 +258,8 @@ function normalizeObsIntegrationSettings(value) {
         ? source.websocketUrl.trim()
         : defaultSettings.obsIntegration.websocketUrl,
     password: typeof source.password === "string" ? source.password : "",
-    mediaSourceName: typeof source.mediaSourceName === "string" ? source.mediaSourceName.trim() : ""
+    mediaSourceNames,
+    mediaSourceName: mediaSourceNames[0] || ""
   };
 }
 
@@ -507,29 +521,62 @@ async function disconnectObs() {
 
 async function playObsRiichiMedia(settings) {
   const obsIntegration = normalizeObsIntegrationSettings(settings?.obsIntegration);
-  if (!obsIntegration.mediaSourceName) {
+  const mediaSourceNames = Array.isArray(obsIntegration.mediaSourceNames)
+    ? obsIntegration.mediaSourceNames
+    : [];
+  if (mediaSourceNames.length === 0) {
     throw new Error("OBS のメディアソース名が未設定です");
   }
 
   const client = await ensureObsConnected(settings);
+  const selectedIndex = Math.floor(Math.random() * mediaSourceNames.length);
+  const selectedInputName = mediaSourceNames[selectedIndex];
   await client.call("TriggerMediaInputAction", {
-    inputName: obsIntegration.mediaSourceName,
+    inputName: selectedInputName,
     mediaAction: "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART"
   });
   setObsStatus({
-    message: `再生: ${obsIntegration.mediaSourceName}`
+    message:
+      mediaSourceNames.length > 1
+        ? `再生: ${selectedInputName}（${mediaSourceNames.length}件からランダム）`
+        : `再生: ${selectedInputName}`
   });
 }
 
 async function listObsInputs(settings) {
   const client = await ensureObsConnected(settings);
+  const currentScene = await client.call("GetCurrentProgramScene");
+  const sceneName = currentScene?.responseData?.currentProgramSceneName;
+  if (!sceneName) {
+    return [];
+  }
+
+  const sceneItemList = await client.call("GetSceneItemList", { sceneName });
+  const sourceNamesInScene = new Set(
+    Array.isArray(sceneItemList?.responseData?.sceneItems)
+      ? sceneItemList.responseData.sceneItems
+          .map((item) => item?.sourceName)
+          .filter((name) => typeof name === "string" && name.length > 0)
+      : []
+  );
+
   const response = await client.call("GetInputList");
   const inputs = Array.isArray(response?.responseData?.inputs) ? response.responseData.inputs : [];
-  return inputs.map((input) => ({
-    inputName: input.inputName ?? "",
-    inputKind: input.inputKind ?? "",
-    unversionedInputKind: input.unversionedInputKind ?? ""
-  }));
+  const isMediaSourceKind = (kind) => {
+    const normalized = String(kind || "").toLowerCase();
+    return normalized.includes("ffmpeg_source") || normalized.includes("vlc_source");
+  };
+  return inputs
+    .filter(
+      (input) =>
+        sourceNamesInScene.has(input.inputName) &&
+        isMediaSourceKind(input.unversionedInputKind || input.inputKind)
+    )
+    .map((input) => ({
+      inputName: input.inputName ?? "",
+      inputKind: input.inputKind ?? "",
+      unversionedInputKind: input.unversionedInputKind ?? ""
+    }));
 }
 
 function getOverlayBaseUrl() {

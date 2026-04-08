@@ -12,7 +12,7 @@ const obsSettingsStatus = document.querySelector("#obs-settings-status");
 const designSettingsStatus = document.querySelector("#design-settings-status");
 const obsWebsocketUrl = document.querySelector("#obs-websocket-url");
 const obsPassword = document.querySelector("#obs-password");
-const obsInputSelect = document.querySelector("#obs-input-select");
+const obsInputChecklist = document.querySelector("#obs-input-checklist");
 const obsTabOnButton = document.querySelector("#obs-tab-on");
 const obsTabOffButton = document.querySelector("#obs-tab-off");
 const obsTabContent = document.querySelector("#obs-tab-content");
@@ -137,6 +137,26 @@ function normalizeFontFamilySelection(value) {
   return first || "Segoe UI";
 }
 
+function getObsChecklistInputs() {
+  return [
+    ...obsInputChecklist.querySelectorAll('input[type="checkbox"][name="obs-media-source"]')
+  ];
+}
+
+function getSelectedObsMediaSourceNames() {
+  return getObsChecklistInputs()
+    .filter((input) => input.checked)
+    .map((input) => input.value)
+    .filter((name) => typeof name === "string" && name.trim().length > 0);
+}
+
+function applyPendingObsSelection() {
+  const selectedSet = new Set(pendingObsMediaSourceNames);
+  for (const input of getObsChecklistInputs()) {
+    input.checked = selectedSet.has(input.value);
+  }
+}
+
 function ensureFontOption(value) {
   const font = normalizeFontFamilySelection(value);
   if (!font) {
@@ -184,10 +204,14 @@ function applySettings(settings) {
   const obs = settings?.obsIntegration || {};
   obsWebsocketUrl.value = obs.websocketUrl || "ws://127.0.0.1:4455";
   obsPassword.value = obs.password || "";
-  pendingObsMediaSourceName = obs.mediaSourceName || "";
-  if ([...obsInputSelect.options].some((option) => option.value === pendingObsMediaSourceName)) {
-    obsInputSelect.value = pendingObsMediaSourceName;
-  }
+  pendingObsMediaSourceNames = Array.isArray(obs.mediaSourceNames)
+    ? obs.mediaSourceNames
+        .map((name) => (typeof name === "string" ? name.trim() : ""))
+        .filter((name) => name.length > 0)
+    : typeof obs.mediaSourceName === "string" && obs.mediaSourceName.trim().length > 0
+      ? [obs.mediaSourceName.trim()]
+      : [];
+  applyPendingObsSelection();
 
   const overlayDesign = settings?.overlayDesign || {};
   const designValue =
@@ -227,6 +251,7 @@ function applySettings(settings) {
 
 function collectFormSettings() {
   const globalDesign = getSelectedGlobalDesign();
+  const selectedMediaSourceNames = getSelectedObsMediaSourceNames();
   return {
     hanCountScope: hanScopeInputs.find((input) => input.checked)?.value || "all_players",
     overlayDesign: {
@@ -252,7 +277,10 @@ function collectFormSettings() {
       enabled: true,
       websocketUrl: obsWebsocketUrl.value.trim(),
       password: obsPassword.value,
-      mediaSourceName: (obsInputSelect.value || pendingObsMediaSourceName || "").trim()
+      mediaSourceNames:
+        selectedMediaSourceNames.length > 0 ? selectedMediaSourceNames : pendingObsMediaSourceNames,
+      mediaSourceName:
+        selectedMediaSourceNames[0] || pendingObsMediaSourceNames[0] || ""
     }
   };
 }
@@ -291,7 +319,7 @@ function setDesignSettingsMessage(message) {
 }
 
 let settingsAutoSaveTimer = null;
-let pendingObsMediaSourceName = "";
+let pendingObsMediaSourceNames = [];
 
 async function saveGeneralSettingsFromForm() {
   const current = await window.mahjongOverlayApp.getSettings();
@@ -379,42 +407,49 @@ function scheduleAutoSaveDesign() {
 }
 
 function renderObsInputOptions(inputs) {
-  obsInputSelect.replaceChildren();
+  obsInputChecklist.replaceChildren();
 
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = Array.isArray(inputs) && inputs.length > 0
-    ? "ソースを選択してください"
-    : "ソース一覧を取得してください";
-  obsInputSelect.append(placeholder);
+  if (!Array.isArray(inputs) || inputs.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "hint";
+    empty.textContent = "メディアソースが見つかりません";
+    obsInputChecklist.append(empty);
+    return;
+  }
 
-  for (const input of Array.isArray(inputs) ? inputs : []) {
-    if (!input?.inputName) {
+  for (const item of Array.isArray(inputs) ? inputs : []) {
+    if (!item?.inputName) {
       continue;
     }
-    const selectOption = document.createElement("option");
-    selectOption.value = input.inputName;
-    const kind = input.unversionedInputKind || input.inputKind;
-    selectOption.textContent = kind ? `${input.inputName} (${kind})` : input.inputName;
-    obsInputSelect.append(selectOption);
+    const kind = item.unversionedInputKind || item.inputKind;
+    const label = document.createElement("label");
+    label.className = "obs-input-check-item";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.name = "obs-media-source";
+    checkbox.value = item.inputName;
+    checkbox.checked = pendingObsMediaSourceNames.includes(item.inputName);
+    const text = document.createElement("span");
+    text.textContent = kind ? `${item.inputName} (${kind})` : item.inputName;
+    label.append(checkbox, text);
+    obsInputChecklist.append(label);
   }
 
-  if (pendingObsMediaSourceName) {
-    const hasPending = [...obsInputSelect.options].some(
-      (option) => option.value === pendingObsMediaSourceName
-    );
-    if (hasPending) {
-      obsInputSelect.value = pendingObsMediaSourceName;
-    }
-  }
+  applyPendingObsSelection();
 }
 
-obsInputSelect.addEventListener("change", () => {
-  pendingObsMediaSourceName = obsInputSelect.value || "";
-  saveObsSettingsFromForm().catch((error) => {
-    setObsSettingsMessage(error?.message || String(error));
+if (obsInputChecklist) {
+  obsInputChecklist.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || target.name !== "obs-media-source") {
+      return;
+    }
+    pendingObsMediaSourceNames = getSelectedObsMediaSourceNames();
+    saveObsSettingsFromForm().catch((error) => {
+      setObsSettingsMessage(error?.message || String(error));
+    });
   });
-});
+}
 
 async function refreshObsInputOptions() {
   const result = await window.mahjongOverlayApp.listObsInputs();
@@ -492,6 +527,7 @@ if (obsTabOffButton) {
 }
 
 const obsPlayTestButton = document.querySelector("#obs-play-test");
+const obsRefreshInputsButton = document.querySelector("#obs-refresh-inputs");
 if (obsPlayTestButton) {
   obsPlayTestButton.addEventListener("click", async () => {
     await saveObsSettingsFromForm();
@@ -502,6 +538,19 @@ if (obsPlayTestButton) {
       setObsSettingsMessage(error?.message || String(error));
     }
     await refreshStatus();
+  });
+}
+
+if (obsRefreshInputsButton) {
+  obsRefreshInputsButton.addEventListener("click", async () => {
+    await saveObsSettingsFromForm();
+    try {
+      await refreshObsInputOptions();
+      const count = getObsChecklistInputs().length;
+      setObsSettingsMessage(`OBSソース一覧を更新しました（${count}件）`);
+    } catch (error) {
+      setObsSettingsMessage(error?.message || String(error));
+    }
   });
 }
 

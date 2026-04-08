@@ -103,13 +103,14 @@
           <div id="obs-tab-content">
             <div class="settings-card form-card">
               <label class="field-group">
-                <span class="field-label">メディアソース名</span>
-                <select id="obs-input-select">
-                  <option value="">ソース一覧を取得してください</option>
-                </select>
+                <span class="field-label">メディアソース名（複数選択可）</span>
+                <div id="obs-input-checklist" class="obs-input-checklist">
+                  <p class="hint">OBS連携後にメディアソース一覧を取得します</p>
+                </div>
               </label>
             </div>
             <div class="button-row">
+              <button id="obs-refresh-inputs">OBSソース一覧更新</button>
               <button id="obs-play-test">テスト再生</button>
             </div>
             <p class="hint" id="obs-settings-status"></p>

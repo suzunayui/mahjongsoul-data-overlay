@@ -271,6 +271,33 @@ select option {
   background: #ffffff;
 }
 
+select[multiple] {
+  min-height: 180px;
+}
+
+.obs-input-checklist {
+  display: grid;
+  gap: 8px;
+  min-height: 120px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(122, 162, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.obs-input-check-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.obs-input-check-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
 input[type="color"] {
   padding: 4px;
   height: 42px;
