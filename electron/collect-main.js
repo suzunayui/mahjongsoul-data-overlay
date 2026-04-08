@@ -5,10 +5,12 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { readJsonFile, writeJsonFile } from "../mjs-runtime.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
+const launchScript = path.join(repoRoot, "mjs-launch.js");
 const collectScript = path.join(repoRoot, "mjs-collect-with-overlay.js");
 const htmlDir = path.join(repoRoot, "html");
 const debugPort = Number(process.env.CHROME_DEBUG_PORT || 9222);
@@ -20,8 +22,7 @@ const configDir = path.join(getAppDataDir(), "config");
 const settingsPath = path.join(configDir, "settings.json");
 const recordsDir = path.join(getAppDataDir(), "records");
 const pointsDir = path.join(getAppDataDir(), "points");
-const debugOutputDir = path.join(getAppDataDir(), "output");
-const latestMatchDebugPath = path.join(debugOutputDir, "match-debug-latest.json");
+const latestMatchStatePath = path.join(recordsDir, "match-latest.json");
 const hanEventsPath = path.join(recordsDir, "han-events.json");
 const hanSeenKeysPath = path.join(recordsDir, "seen-han-keys.json");
 const hanSummaryPath = path.join(recordsDir, "han-summary.json");
@@ -41,6 +42,7 @@ const defaultSettings = {
 };
 
 let mainWindow = null;
+let launchProcess = null;
 let collectProcess = null;
 let obsStatus = {
   connected: false,
@@ -212,7 +214,6 @@ function getChildEnv() {
     ...process.env,
     ...(app.isPackaged ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
     MJS_APPDATA_DIR: getAppDataDir(),
-    MJS_WRITE_DEBUG_OUTPUT: "1",
     MJS_MATCH_POLL_MS: String(matchPollMs)
   };
 }
@@ -259,20 +260,6 @@ async function writeSettings(nextSettings) {
   return merged;
 }
 
-async function writeJsonFile(filePath, value) {
-  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.promises.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-async function readJsonFile(filePath, fallback = null) {
-  try {
-    const raw = await fs.promises.readFile(filePath, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-
 function getDateKey() {
   const now = new Date();
   const year = now.getFullYear();
@@ -287,10 +274,9 @@ function sendStatus() {
   }
 
   mainWindow.webContents.send("app:status", {
+    launchRunning: isRunning(launchProcess),
     collectRunning: isRunning(collectProcess),
     htmlDir,
-    debugOutputDir,
-    latestMatchDebugPath,
     obs: obsStatus
   });
 }
@@ -306,7 +292,7 @@ function setObsStatus(nextStatus) {
 async function ensureObsConnected(settings) {
   const obsIntegration = normalizeObsIntegrationSettings(settings?.obsIntegration);
   if (!obsIntegration.enabled) {
-    throw new Error("OBS連携がOFFです");
+    throw new Error("OBS???OFF??");
   }
 
   if (
@@ -326,7 +312,7 @@ async function ensureObsConnected(settings) {
     connecting: true,
     connected: false,
     websocketUrl: obsIntegration.websocketUrl,
-    message: "接続中..."
+    message: "???..."
   });
 
   try {
@@ -335,7 +321,7 @@ async function ensureObsConnected(settings) {
       connecting: false,
       connected: true,
       websocketUrl: obsIntegration.websocketUrl,
-      message: "接続済み"
+      message: "????"
     });
     return obsClient;
   } catch (error) {
@@ -358,14 +344,14 @@ async function disconnectObs() {
   setObsStatus({
     connecting: false,
     connected: false,
-    message: "未接続"
+    message: "???"
   });
 }
 
 async function playObsRiichiMedia(settings) {
   const obsIntegration = normalizeObsIntegrationSettings(settings?.obsIntegration);
   if (!obsIntegration.mediaSourceName) {
-    throw new Error("OBS のメディアソース名が未設定です");
+    throw new Error("OBS ???????????????");
   }
 
   const client = await ensureObsConnected(settings);
@@ -374,7 +360,7 @@ async function playObsRiichiMedia(settings) {
     mediaAction: "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART"
   });
   setObsStatus({
-    message: `再生: ${obsIntegration.mediaSourceName}`
+    message: `??: ${obsIntegration.mediaSourceName}`
   });
 }
 
@@ -415,11 +401,11 @@ async function checkRiichiTrigger() {
     return;
   }
 
-  const latestMatchDebug = await readJsonFile(latestMatchDebugPath, null);
+  const latestMatchState = await readJsonFile(latestMatchStatePath, null);
   const isFreshSelfRiichi =
-    latestMatchDebug?.inGame === true &&
-    latestMatchDebug?.selfJustRiichi === true &&
-    latestMatchDebug?.latestSelfRiichiEvent?.capturedAt === latest.capturedAt;
+    latestMatchState?.inGame === true &&
+    latestMatchState?.selfJustRiichi === true &&
+    latestMatchState?.latestSelfRiichiEvent?.capturedAt === latest.capturedAt;
   if (!isFreshSelfRiichi) {
     lastRiichiEventAt = latest.capturedAt;
     return;
@@ -549,6 +535,26 @@ function startCollect() {
   return collectProcess;
 }
 
+function startLaunch() {
+  if (isRunning(launchProcess)) {
+    return launchProcess;
+  }
+
+  launchProcess = spawn(getNodeCommand(), [launchScript], {
+    cwd: repoRoot,
+    env: getChildEnv(),
+    stdio: "ignore",
+    windowsHide: true
+  });
+
+  launchProcess.on("exit", () => {
+    sendStatus();
+  });
+
+  sendStatus();
+  return launchProcess;
+}
+
 function stopCollect() {
   if (!isRunning(collectProcess)) {
     return;
@@ -557,6 +563,25 @@ function stopCollect() {
   collectProcess.kill();
   sendStatus();
 }
+
+function stopLaunch() {
+  if (!isRunning(launchProcess)) {
+    return;
+  }
+
+  launchProcess.kill();
+  sendStatus();
+}
+
+ipcMain.handle("launch:start", async () => {
+  startLaunch();
+  return { ok: true };
+});
+
+ipcMain.handle("launch:stop", async () => {
+  stopLaunch();
+  return { ok: true };
+});
 
 ipcMain.handle("collect:start", async () => {
   startCollect();
@@ -570,7 +595,7 @@ ipcMain.handle("collect:stop", async () => {
 
 ipcMain.handle("folder:openHtml", async () => {
   if (!fs.existsSync(htmlDir)) {
-    return { ok: false, message: "html フォルダが見つかりません" };
+    return { ok: false, message: "html ????????????" };
   }
 
   await shell.openPath(htmlDir);
@@ -579,12 +604,6 @@ ipcMain.handle("folder:openHtml", async () => {
 
 ipcMain.handle("settings:get", async () => {
   return await readSettings();
-});
-
-ipcMain.handle("folder:openDebug", async () => {
-  await fs.promises.mkdir(debugOutputDir, { recursive: true });
-  await shell.openPath(debugOutputDir);
-  return { ok: true };
 });
 
 ipcMain.handle("settings:save", async (_event, settings) => {
@@ -680,7 +699,7 @@ ipcMain.handle("points:reset", async () => {
   const nextBase = latest || start;
 
   if (!nextBase) {
-    return { ok: false, message: "表示に使える段位ポイントデータがありません" };
+    return { ok: false, message: "?????????????????????" };
   }
 
   await writeJsonFile(startPath, nextBase);
@@ -691,10 +710,9 @@ ipcMain.handle("points:reset", async () => {
 });
 
 ipcMain.handle("app:getStatus", async () => ({
+  launchRunning: isRunning(launchProcess),
   collectRunning: isRunning(collectProcess),
   htmlDir,
-  debugOutputDir,
-  latestMatchDebugPath,
   obs: obsStatus
 }));
 
@@ -732,6 +750,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  stopLaunch();
   stopCollect();
   stopRiichiWatch();
   disconnectObs().catch(() => {});

@@ -1,11 +1,10 @@
-import { chromium } from "playwright";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { appDataBaseDir, debugPort, installHooks } from "./mjs-common.js";
+import { appDataBaseDir, connectMahjongSoulPage, installHooks } from "./mjs-common.js";
+import { readJsonFile, registerShutdown, writeJsonFile } from "./mjs-runtime.js";
 
 const recordsDir = path.join(appDataBaseDir, "records");
-const debugOutputDir = path.join(appDataBaseDir, "output");
 const latestMatchStatePath = path.join(recordsDir, "match-latest.json");
 const recordSeenKeysPath = path.join(recordsDir, "seen-record-keys.json");
 const hanEventsPath = path.join(recordsDir, "han-events.json");
@@ -14,7 +13,6 @@ const hanSummaryPath = path.join(recordsDir, "han-summary.json");
 const riichiEventsPath = path.join(recordsDir, "riichi-events.json");
 const settingsPath = path.join(appDataBaseDir, "config", "settings.json");
 const pollMs = Number(process.env.MJS_MATCH_POLL_MS || 1000);
-const shouldWriteDebugOutput = !process.pkg || process.env.MJS_WRITE_DEBUG_OUTPUT === "1";
 
 async function extractMatchState(page) {
   return await page.evaluate("window.__mjsExtractMatchState()");
@@ -23,61 +21,6 @@ async function extractMatchState(page) {
 async function writeLatestMatchState(snapshot) {
   await fs.mkdir(recordsDir, { recursive: true });
   await fs.writeFile(latestMatchStatePath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
-}
-
-async function outputDirExists() {
-  if (shouldWriteDebugOutput) {
-    await fs.mkdir(debugOutputDir, { recursive: true });
-    return true;
-  }
-  try {
-    const stat = await fs.stat(debugOutputDir);
-    return stat.isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-function createSafeTimestamp(isoString) {
-  return isoString.replaceAll(":", "-").replaceAll(".", "-");
-}
-
-function hasHuleLikeData(snapshot) {
-  return (
-    (Array.isArray(snapshot.huleCandidates) && snapshot.huleCandidates.length > 0) ||
-    (Array.isArray(snapshot.actionMapSummaries) && snapshot.actionMapSummaries.length > 0)
-  );
-}
-
-function hasRiichiLikeData(snapshot) {
-  return (
-    snapshot?.latestRiichiSummary != null ||
-    snapshot?.latestRiichiSnapshot != null ||
-    snapshot?.latestSelfRiichiEvent != null ||
-    (Array.isArray(snapshot?.recentRiichiSnapshots) && snapshot.recentRiichiSnapshots.length > 0) ||
-    (Array.isArray(snapshot?.riichiCaptureMeta?.actionNames) && snapshot.riichiCaptureMeta.actionNames.length > 0)
-  );
-}
-
-async function writeDebugOutput(snapshot, reason) {
-  if (!(await outputDirExists())) {
-    return;
-  }
-
-  const latestDebugPath = path.join(debugOutputDir, "match-debug-latest.json");
-  await fs.writeFile(latestDebugPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
-
-  if (reason === "initial") {
-    return;
-  }
-
-  if (!hasHuleLikeData(snapshot) && !hasRiichiLikeData(snapshot) && snapshot.inGame) {
-    return;
-  }
-
-  const timestamp = createSafeTimestamp(snapshot.createdAt);
-  const filePath = path.join(debugOutputDir, `match-debug-${timestamp}.json`);
-  await fs.writeFile(filePath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
 }
 
 function formatTimestampParts(isoString) {
@@ -103,6 +46,26 @@ function buildRecordKey(snapshot) {
       totalPoint: player.totalPoint ?? null
     }))
   );
+}
+
+function buildSnapshotFingerprint(snapshot) {
+  return JSON.stringify({
+    inGame: snapshot.inGame,
+    selfAbsoluteSeat: snapshot.selfAbsoluteSeat,
+    dealerAbsoluteSeat: snapshot.dealerAbsoluteSeat,
+    extractedPlayers: snapshot.extractedPlayers,
+    gameEndSummary: snapshot.gameEndSummary,
+    latestHuleSummary: snapshot.latestHuleSummary,
+    latestRiichiSummary: snapshot.latestRiichiSummary,
+    selfRiichiState: snapshot.selfRiichiState,
+    activeRiichiPlayers: snapshot.activeRiichiPlayers
+  });
+}
+
+function extractHanScope(settings) {
+  return settings?.hanCountScope === "all_players" || settings?.hanCountScope === "self_with_ron_loss"
+    ? settings.hanCountScope
+    : "self_only";
 }
 
 async function appendMatchRecord(snapshot) {
@@ -231,19 +194,6 @@ async function dedupeDailyRecordFiles() {
       await fs.writeFile(filePath, `${uniqueLines.join("\n")}\n`, "utf8");
     }
   }
-}
-
-async function readJsonFile(filePath, fallback) {
-  try {
-    return JSON.parse(await fs.readFile(filePath, "utf8"));
-  } catch {
-    return fallback;
-  }
-}
-
-async function writeJsonFile(filePath, value) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
 function buildSelfRiichiEvent(snapshot) {
@@ -540,21 +490,12 @@ async function rebuildHanSummary() {
   return summary;
 }
 
-export async function main() {
-  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
-  const context = browser.contexts()[0];
-
-  if (!context) {
-    throw new Error(`No browser context found on port ${debugPort}. Start npm.cmd run mjs:launch first.`);
-  }
-
-  const page =
-    context.pages().find((candidate) => candidate.url().includes("mahjongsoul")) ||
-    context.pages()[0];
-
-  if (!page) {
-    throw new Error("No page found in the connected browser.");
-  }
+export async function main(options = {}) {
+  const session = options.session ?? (await connectMahjongSoulPage());
+  const browser = session.browser;
+  const page = session.page;
+  const ownsBrowser = options.session == null;
+  const manageProcessSignals = options.manageProcessSignals !== false;
 
   await installHooks(page);
   await dedupeDailyRecordFiles();
@@ -563,10 +504,6 @@ export async function main() {
   console.log(`Watching match state every ${pollMs}ms`);
   console.log(`Latest match state: ${latestMatchStatePath}`);
   console.log(`Match records: ${recordsDir}`);
-  if (await outputDirExists()) {
-    console.log(`Debug output: ${debugOutputDir}`);
-  }
-
   let lastFingerprint = "";
   let lastRecordKey = "";
   let initializedRecordBaseline = false;
@@ -575,6 +512,7 @@ export async function main() {
   let lastSelfRiichiLike = false;
   let initializedSelfRiichiBaseline = false;
   let lastSelfRiichiState = null;
+  let lastHanSummaryScope = extractHanScope(await readJsonFile(settingsPath, { hanCountScope: "all_players" }));
 
   const saveSnapshot = async (reason) => {
     const snapshot = await extractMatchState(page);
@@ -591,23 +529,7 @@ export async function main() {
       selfJustRiichi: justSelfRiichi,
       latestSelfRiichiEvent
     };
-    const fingerprint = JSON.stringify({
-      inGame: enrichedSnapshot.inGame,
-      extractedPlayers: enrichedSnapshot.extractedPlayers,
-      latestHuleSnapshot: enrichedSnapshot.latestHuleSnapshot,
-      recentHuleSnapshots: enrichedSnapshot.recentHuleSnapshots,
-      latestRiichiSnapshot: enrichedSnapshot.latestRiichiSnapshot,
-      latestRiichiSummary: enrichedSnapshot.latestRiichiSummary,
-      recentRiichiSnapshots: enrichedSnapshot.recentRiichiSnapshots,
-      riichiCaptureMeta: enrichedSnapshot.riichiCaptureMeta,
-      selfRiichiState: enrichedSnapshot.selfRiichiState,
-      activeRiichiPlayers: enrichedSnapshot.activeRiichiPlayers,
-      playerRiichiStates: enrichedSnapshot.playerRiichiStates,
-      selfJustRiichi: enrichedSnapshot.selfJustRiichi,
-      latestSelfRiichiEvent: enrichedSnapshot.latestSelfRiichiEvent,
-      scoreCandidates: enrichedSnapshot.scoreCandidates,
-      playerSummaries: enrichedSnapshot.playerSummaries.map((player) => player.snapshot)
-    });
+    const fingerprint = buildSnapshotFingerprint(enrichedSnapshot);
 
     if (fingerprint === lastFingerprint) {
       return;
@@ -615,7 +537,6 @@ export async function main() {
 
     lastFingerprint = fingerprint;
     await writeLatestMatchState(enrichedSnapshot);
-    await writeDebugOutput(enrichedSnapshot, reason);
     console.log(`[${enrichedSnapshot.createdAt}] Updated latest match state (${reason}): ${latestMatchStatePath}`);
 
     if (!initializedSelfRiichiBaseline) {
@@ -659,6 +580,7 @@ export async function main() {
   const interval = setInterval(() => {
     saveSnapshot("poll")
       .then(async () => {
+        let shouldRebuildHanSummary = false;
         const snapshot = await readJsonFile(latestMatchStatePath, null);
         if (snapshot?.latestHuleSummary || snapshot?.latestHuleSnapshot) {
           const currentHanEvent = normalizeHuleEvent(snapshot);
@@ -671,12 +593,23 @@ export async function main() {
             const hanResult = await appendHanEvent(snapshot);
             if (hanResult.written) {
               lastHanKey = currentHanKey;
+              shouldRebuildHanSummary = true;
             }
           }
         } else if (!initializedHanBaseline) {
           initializedHanBaseline = true;
         }
-        await rebuildHanSummary();
+
+        const settings = await readJsonFile(settingsPath, { hanCountScope: "all_players" });
+        const currentHanScope = extractHanScope(settings);
+        if (currentHanScope !== lastHanSummaryScope) {
+          lastHanSummaryScope = currentHanScope;
+          shouldRebuildHanSummary = true;
+        }
+
+        if (shouldRebuildHanSummary) {
+          await rebuildHanSummary();
+        }
       })
       .catch((error) => {
         console.error(error);
@@ -685,16 +618,17 @@ export async function main() {
 
   const shutdown = async () => {
     clearInterval(interval);
-    await browser.close();
-    process.exit(0);
+    if (ownsBrowser && browser) {
+      await browser.close();
+    }
+    if (manageProcessSignals) {
+      process.exit(0);
+    }
   };
 
-  process.on("SIGINT", () => {
-    shutdown().catch((error) => {
-      console.error(error);
-      process.exit(1);
-    });
-  });
+  if (manageProcessSignals) {
+    registerShutdown(shutdown);
+  }
 
   await new Promise(() => {});
 }

@@ -3,79 +3,95 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>データ収集</title>
+    <title>MahjongSoul Data Overlay</title>
     <link rel="stylesheet" href="./simple.css" />
   </head>
   <body>
     <main class="app simple">
       <section class="panel simple-panel">
-        <p class="eyebrow">Collect</p>
-        <h1>データ収集</h1>
+        <p class="eyebrow">MahjongSoul Data Overlay</p>
+        <h1>かんたん開始</h1>
         <div class="tab-row">
-          <button class="tab-button is-active" data-tab-target="collect">収集</button>
+          <button class="tab-button is-active" data-tab-target="quick">かんたん開始</button>
           <button class="tab-button" data-tab-target="settings">設定</button>
           <button class="tab-button" data-tab-target="obs">OBS連携</button>
         </div>
 
-        <section class="tab-panel is-active" data-tab-panel="collect">
-          <p class="lead">ランク、点数、戦績、翻数を収集して OBS 用 HTML を更新します。</p>
+        <section class="tab-panel is-active" data-tab-panel="quick">
+          <p class="lead">順番に押すだけで準備できます。</p>
           <div class="status-line">
-            <span>状態</span>
+            <span>雀魂起動</span>
+            <strong id="launch-status">停止中</strong>
+          </div>
+          <div class="status-line">
+            <span>データ取得</span>
             <strong id="collect-status">停止中</strong>
           </div>
+          <ol class="step-list">
+            <li>
+              <strong>1. 雀魂起動</strong>
+              <div class="button-row">
+                <button id="launch-start" class="primary">雀魂起動</button>
+                <button id="launch-stop">停止</button>
+              </div>
+            </li>
+            <li>
+              <strong>2. データ取得開始</strong>
+              <div class="button-row">
+                <button id="collect-start" class="primary">データ取得開始</button>
+                <button id="collect-stop" class="danger">停止</button>
+              </div>
+            </li>
+            <li>
+              <strong>3. OBS用のHTMLフォルダを開く</strong>
+              <div class="button-row">
+                <button id="open-html">OBS用HTMLフォルダを開く</button>
+              </div>
+            </li>
+          </ol>
           <p class="hint" id="html-dir"></p>
-          <p class="hint" id="debug-dir"></p>
-          <p class="hint" id="debug-json-path"></p>
-          <div class="button-row">
-            <button id="collect-start" class="primary">収集開始</button>
-            <button id="collect-stop" class="danger">停止</button>
-          </div>
-          <div class="button-row">
-            <button id="open-html">OBS 用 HTML フォルダを開く</button>
-            <button id="open-debug">デバッグ JSON を開く</button>
-          </div>
         </section>
 
         <section class="tab-panel" data-tab-panel="settings">
-          <p class="lead">翻数の集計範囲と、記録データのリセットを設定します。</p>
+          <p class="lead">役数カウントの範囲やリセット操作を行います。</p>
           <div class="settings-card">
-            <p class="settings-label">翻数の数え方</p>
+            <p class="settings-label">役数の数え方</p>
             <label class="radio-row">
               <input type="radio" name="han-count-scope" value="all_players" />
-              <span>翻数は4人全員分を数える</span>
+              <span>全プレイヤー分をカウント</span>
             </label>
             <label class="radio-row">
               <input type="radio" name="han-count-scope" value="self_only" />
-              <span>翻数は自分の和了だけを数える</span>
+              <span>自分の和了のみカウント</span>
             </label>
             <label class="radio-row">
               <input type="radio" name="han-count-scope" value="self_with_ron_loss" />
-              <span>翻数は自分の和了を数えて、ロンされたらその分を減らす</span>
+              <span>自分の和了を加算し、放銃分を減算</span>
             </label>
           </div>
           <div class="button-row">
             <button id="save-settings" class="primary">設定を保存</button>
-            <button id="reset-han">翻数をリセットする</button>
+            <button id="reset-han">役数をリセット</button>
           </div>
           <div class="button-row">
-            <button id="reset-records">戦績をリセットする</button>
-            <button id="reset-points">点数の開始値をリセットする</button>
+            <button id="reset-records">順位をリセット</button>
+            <button id="reset-points">ポイント基準値をリセット</button>
           </div>
           <p class="hint" id="settings-status"></p>
         </section>
 
         <section class="tab-panel" data-tab-panel="obs">
-          <p class="lead">リーチした瞬間に、OBS WebSocket 経由で指定メディアソースを再生します。</p>
+          <p class="lead">OBS WebSocket に接続し、リーチ演出のメディア再生を設定します。</p>
           <div class="status-line">
             <span>OBS 接続</span>
             <strong id="obs-status">未接続</strong>
           </div>
           <p class="hint" id="obs-status-message"></p>
           <div class="settings-card">
-            <p class="settings-label">リーチ演出</p>
+            <p class="settings-label">連携オン/オフ</p>
             <label class="checkbox-row">
               <input type="checkbox" id="obs-enabled" />
-              <span>リーチ演出を使う</span>
+              <span>連携を有効にする</span>
             </label>
           </div>
           <div class="settings-card form-card">
@@ -85,7 +101,7 @@
             </label>
             <label class="field-group">
               <span class="field-label">パスワード</span>
-              <input id="obs-password" type="password" placeholder="必要なら入力" />
+              <input id="obs-password" type="password" placeholder="未設定なら空欄" />
             </label>
             <label class="field-group">
               <span class="field-label">メディアソース名</span>
@@ -105,7 +121,7 @@
             </label>
           </div>
           <div class="button-row">
-            <button id="save-obs-settings" class="primary">OBS 設定を保存</button>
+            <button id="save-obs-settings" class="primary">OBS設定を保存</button>
             <button id="obs-connect">接続</button>
             <button id="obs-disconnect">切断</button>
             <button id="obs-refresh-inputs">ソース一覧を取得</button>

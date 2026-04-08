@@ -2,6 +2,7 @@ import path from "node:path";
 import process from "node:process";
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
 
 export const appDataBaseDir = path.resolve(process.env.MJS_APPDATA_DIR || ".");
 export const userDataDir = path.join(appDataBaseDir, ".playwright-profile");
@@ -18,6 +19,31 @@ export const rankAssetPattern =
 
 export function resolveAppDataPath(...parts) {
   return path.join(appDataBaseDir, ...parts);
+}
+
+export async function connectMahjongSoulPage() {
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
+  const context = browser.contexts()[0];
+
+  if (!context) {
+    await browser.close();
+    throw new Error(`No browser context found on port ${debugPort}. Start npm.cmd run mjs:launch first.`);
+  }
+
+  const page =
+    context.pages().find((candidate) => candidate.url().includes("mahjongsoul")) ||
+    context.pages()[0];
+
+  if (!page) {
+    await browser.close();
+    throw new Error("No page found in the connected browser.");
+  }
+
+  return {
+    browser,
+    context,
+    page
+  };
 }
 
 export function isInterestingTextPayload(text) {

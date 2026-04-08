@@ -3,7 +3,7 @@
     return;
   }
 
-  const helperVersion = 5;
+  const helperVersion = 6;
   if ((window.__mjsPageHelpersVersion || 0) >= helperVersion) {
     return;
   }
@@ -157,6 +157,10 @@
       return out;
     };
 
+    const summarizeArray = (value, limit = 4) => (
+      Array.isArray(value) ? value.slice(0, limit).map((item) => summarize(item, 1)) : []
+    );
+
     const findFirstString = (value, predicate, depth = 0, seen = new WeakSet()) => {
       if (value == null) {
         return null;
@@ -276,14 +280,6 @@
         item.nickname.trim().length > 0 &&
         item.account_id !== selfAccountId
     );
-
-    const playerSummaries = Array.isArray(players)
-      ? players.map((player, index) => ({
-          index,
-          keys: safeKeys(player),
-          snapshot: summarize(player)
-        }))
-      : [];
 
     const seatLabels = ["self", "shimocha", "toimen", "kamicha"];
     const seatLabelsJp = [
@@ -603,86 +599,6 @@
       });
     }
 
-    const scoreCandidates = [];
-    const seen = new WeakSet();
-    const walk = (value, path, depth = 0) => {
-      if (!value || typeof value !== "object" || depth > 3 || seen.has(value)) {
-        return;
-      }
-      seen.add(value);
-
-      for (const key of safeKeys(value)) {
-        let item;
-        try {
-          item = value[key];
-        } catch {
-          continue;
-        }
-
-        if (/score|point|gold|liqibang|benchang|total_point|all_point/i.test(key)) {
-          scoreCandidates.push({
-            path: path + "." + key,
-            value: summarize(item)
-          });
-        }
-
-        if (item && typeof item === "object") {
-          walk(item, path + "." + key, depth + 1);
-        }
-      }
-    };
-
-    walk(desktopMgr, "view.DesktopMgr.Inst");
-
-    const interestingActionPattern = /hule|hora|agari|rong|ron|zimo|tsumo|liuju|roundend|end/i;
-    const actionMapSummaries = actionMap
-      ? safeKeys(actionMap)
-          .filter((key) => interestingActionPattern.test(key))
-          .map((key) => {
-            let item;
-            try {
-              item = actionMap[key];
-            } catch {
-              item = null;
-            }
-            return {
-              key,
-              snapshot: summarize(item)
-            };
-          })
-      : [];
-
-    const huleCandidates = [];
-    const collectInterestingNodes = (value, path, depth = 0, seenNodes = new WeakSet()) => {
-      if (!value || typeof value !== "object" || depth > 4 || seenNodes.has(value)) {
-        return;
-      }
-      seenNodes.add(value);
-
-      for (const key of safeKeys(value)) {
-        let item;
-        try {
-          item = value[key];
-        } catch {
-          continue;
-        }
-
-        if (interestingActionPattern.test(key)) {
-          huleCandidates.push({
-            path: `${path}.${key}`,
-            value: summarize(item)
-          });
-        }
-
-        if (item && typeof item === "object") {
-          collectInterestingNodes(item, `${path}.${key}`, depth + 1, seenNodes);
-        }
-      }
-    };
-
-    collectInterestingNodes(desktopMgr, "view.DesktopMgr.Inst");
-    collectInterestingNodes(actionMgr, "view.DesktopMgr.Inst.action_runner");
-
     return {
       createdAt: new Date().toISOString(),
       url: location.href,
@@ -721,29 +637,13 @@
       latestHuleSummary,
       latestRiichiSnapshot: summarize(latestRiichiEvent),
       latestRiichiSummary,
-      recentHuleSnapshots: Array.isArray(window.__mjsHuleCapture?.events)
-        ? summarize(window.__mjsHuleCapture.events.slice(-5))
-        : [],
-      recentRiichiSnapshots: Array.isArray(window.__mjsRiichiCapture?.events)
-        ? summarize(window.__mjsRiichiCapture.events.slice(-5))
-        : [],
+      recentHuleSnapshots: summarizeArray(window.__mjsHuleCapture?.events, 3),
+      recentRiichiSnapshots: summarizeArray(window.__mjsRiichiCapture?.events, 3),
       selfRiichiState,
       activeRiichiPlayers,
       playerRiichiStates,
-      playerDataSummaries: playerDatas.map((item, index) => ({
-        index,
-        snapshot: summarize(item)
-      })),
       extractedPlayers,
-      gameEndSummary,
-      actionMapSummaries,
-      huleCandidates: huleCandidates.slice(0, 120),
-      desktopMgrKeys: safeKeys(desktopMgr),
-      actionMgrKeys: safeKeys(actionMgr),
-      playerSummaries,
-      scoreCandidates: scoreCandidates.slice(0, 200),
-      desktopSnapshot: summarize(desktopMgr),
-      actionSnapshot: summarize(actionMgr)
+      gameEndSummary
     };
   };
 })();
