@@ -110,6 +110,21 @@ body {
   color: var(--custom-text, #f7f4eb) !important;
 }
 
+:root[data-theme="custom"] .points-label-dealer {
+  color: #ffcf66 !important;
+  text-shadow: 0 0 10px rgba(255, 194, 76, 0.28);
+}
+
+:root[data-theme="custom"] .points-score-top {
+  color: #7fc3ff !important;
+  text-shadow: 0 0 12px rgba(79, 160, 255, 0.24);
+}
+
+:root[data-theme="custom"] .points-score-bottom {
+  color: #ff8e8e !important;
+  text-shadow: 0 0 10px rgba(255, 108, 108, 0.2);
+}
+
 .label {
   margin-bottom: 8px;
   color: var(--accent);
