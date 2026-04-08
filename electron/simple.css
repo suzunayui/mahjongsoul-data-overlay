@@ -122,6 +122,18 @@ h1 {
   gap: 10px;
 }
 
+.step-list {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 14px;
+}
+
+.step-list li {
+  display: grid;
+  gap: 8px;
+}
+
 .settings-card {
   display: grid;
   gap: 12px;
@@ -175,7 +187,8 @@ h1 {
 }
 
 input[type="text"],
-input[type="password"] {
+input[type="password"],
+select {
   appearance: none;
   width: 100%;
   padding: 11px 14px;

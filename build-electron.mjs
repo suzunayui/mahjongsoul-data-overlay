@@ -6,17 +6,10 @@ import { packager } from "@electron/packager";
 const projectRoot = process.cwd();
 const outputRoot = path.join(projectRoot, "dist");
 
-const targets = {
-  launch: {
-    appName: "mahjongsoul-launch",
-    executableName: "mahjongsoul-launch",
-    main: "electron/launch-main.js"
-  },
-  collect: {
-    appName: "mahjongsoul-collect",
-    executableName: "mahjongsoul-collect",
-    main: "electron/collect-main.js"
-  }
+const target = {
+  appName: "mahjongsoul-data-overlay",
+  executableName: "mahjongsoul-data-overlay",
+  main: "electron/collect-main.js"
 };
 
 const ignorePatterns = [
@@ -39,8 +32,7 @@ async function rewritePackageJson(packageJsonPath, target) {
 }
 
 async function buildTarget(targetName) {
-  const target = targets[targetName];
-  if (!target) {
+  if (targetName !== "app") {
     throw new Error(`Unknown electron build target: ${targetName}`);
   }
 
@@ -65,12 +57,11 @@ async function buildTarget(targetName) {
 }
 
 async function main() {
-  const requested = process.argv[2] || "all";
+  const requested = process.argv[2] || "app";
   await fs.mkdir(outputRoot, { recursive: true });
 
   if (requested === "all") {
-    await buildTarget("launch");
-    await buildTarget("collect");
+    await buildTarget("app");
     return;
   }
 

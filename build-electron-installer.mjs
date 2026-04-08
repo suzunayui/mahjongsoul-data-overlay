@@ -6,21 +6,12 @@ import { build } from "electron-builder";
 const projectDir = process.cwd();
 const distDir = path.join(projectDir, "dist");
 
-const targets = {
-  launch: {
-    name: "mahjongsoul-launch",
-    productName: "MahjongSoul Launch",
-    main: "electron/launch-main.js",
-    artifactName: "mahjongsoul-launch-setup-${version}.${ext}",
-    executableName: "mahjongsoul-launch"
-  },
-  collect: {
-    name: "mahjongsoul-collect",
-    productName: "MahjongSoul Collect",
-    main: "electron/collect-main.js",
-    artifactName: "mahjongsoul-collect-setup-${version}.${ext}",
-    executableName: "mahjongsoul-collect"
-  }
+const target = {
+  name: "mahjongsoul-data-overlay",
+  productName: "MahjongSoul Data Overlay",
+  main: "electron/collect-main.js",
+  artifactName: "mahjongsoul-data-overlay-setup-${version}.${ext}",
+  executableName: "mahjongsoul-data-overlay"
 };
 
 function getConfig(target) {
@@ -70,8 +61,7 @@ function getConfig(target) {
 }
 
 async function buildTarget(targetName) {
-  const target = targets[targetName];
-  if (!target) {
+  if (targetName !== "app") {
     throw new Error(`Unknown installer target: ${targetName}`);
   }
 
@@ -90,10 +80,7 @@ async function getCurrentVersion() {
 
 async function cleanupDist() {
   const version = await getCurrentVersion();
-  const keepNames = new Set([
-    `mahjongsoul-launch-setup-${version}.exe`,
-    `mahjongsoul-collect-setup-${version}.exe`
-  ]);
+  const keepNames = new Set([`mahjongsoul-data-overlay-setup-${version}.exe`]);
 
   let entries = [];
   try {
@@ -112,11 +99,10 @@ async function cleanupDist() {
 }
 
 async function main() {
-  const requested = process.argv[2] || "all";
+  const requested = process.argv[2] || "app";
 
   if (requested === "all") {
-    await buildTarget("launch");
-    await buildTarget("collect");
+    await buildTarget("app");
     await cleanupDist();
     return;
   }

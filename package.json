@@ -1,18 +1,14 @@
 {
   "name": "mahjongsoul-data-overlay",
-  "version": "2026.4.5",
+  "version": "2026.4.8",
   "private": true,
   "type": "module",
-  "main": "electron/main.js",
+  "main": "electron/collect-main.js",
   "scripts": {
-    "electron:start:launch": "electron electron/launch-main.js",
-    "electron:start:collect": "electron electron/collect-main.js",
-    "build:installer:launch": "node build-electron-installer.mjs launch",
-    "build:installer:collect": "node build-electron-installer.mjs collect",
-    "build:installer": "node build-electron-installer.mjs all",
-    "build:electron:launch": "node build-electron.mjs launch",
-    "build:electron:collect": "node build-electron.mjs collect",
-    "build:electron": "node build-electron.mjs all"
+    "electron:start": "electron electron/collect-main.js",
+    "build:installer": "node build-electron-installer.mjs app",
+    "build:electron": "node build-electron.mjs app",
+    "clean:dist": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$dist='dist'; if(Test-Path $dist){ $exes=Get-ChildItem -Path $dist -File -Filter *.exe | Sort-Object LastWriteTime -Descending; if($exes.Count -gt 0){ $keep=$exes[0].FullName; Get-ChildItem -Path $dist -Force | Where-Object { $_.FullName -ne $keep } | Remove-Item -Recurse -Force } else { Get-ChildItem -Path $dist -Force | Remove-Item -Recurse -Force } }\""
   },
   "dependencies": {
     "playwright": "^1.59.1"

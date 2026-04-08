@@ -1,4 +1,3 @@
-import { chromium } from "playwright";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -6,7 +5,7 @@ import {
   appDataBaseDir,
   collectRuntimeHints,
   collectVisibleHints,
-  debugPort,
+  connectMahjongSoulPage,
   extractProfileData,
   installHooks,
   isInterestingTextPayload,
@@ -15,9 +14,11 @@ import {
   rankAssetPattern,
   summarizeEntry
 } from "./mjs-common.js";
+import { registerShutdown } from "./mjs-runtime.js";
 
 const pointsDir = path.join(appDataBaseDir, "points");
 const pollMs = Number(process.env.MJS_POLL_MS || 2000);
+const maxNetworkHits = 120;
 
 async function extractProfileDataForPkg(page) {
   return await page.evaluate(`
@@ -199,12 +200,13 @@ function getPointsFingerprint(snapshot) {
   });
 }
 
-async function buildReport(page, networkHits) {
+async function buildReport(page, networkHits, options = {}) {
   let visibleHints = null;
   let runtimeHints = null;
   let extractedProfile;
+  const includeHeavyHints = options.includeHeavyHints === true;
 
-  if (!process.pkg) {
+  if (!process.pkg && includeHeavyHints) {
     try {
       visibleHints = await collectVisibleHints(page);
     } catch (error) {
@@ -277,25 +279,22 @@ async function updatePointsFiles(report) {
   return { changed: false, latestPath, startPath };
 }
 
-export async function main() {
-  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
-  const context = browser.contexts()[0];
-
-  if (!context) {
-    throw new Error(`No browser context found on port ${debugPort}. Start npm.cmd run mjs:launch first.`);
-  }
-
-  const page =
-    context.pages().find((candidate) => candidate.url().includes("mahjongsoul")) ||
-    context.pages()[0];
-
-  if (!page) {
-    throw new Error("No page found in the connected browser.");
-  }
+export async function main(options = {}) {
+  const session = options.session ?? (await connectMahjongSoulPage());
+  const browser = session.browser;
+  const page = session.page;
+  const ownsBrowser = options.session == null;
+  const manageProcessSignals = options.manageProcessSignals !== false;
 
   await installHooks(page);
 
   const networkHits = [];
+  const pushNetworkHit = (entry) => {
+    networkHits.push(entry);
+    if (networkHits.length > maxNetworkHits) {
+      networkHits.splice(0, networkHits.length - maxNetworkHits);
+    }
+  };
 
   page.on("response", async (response) => {
     const url = response.url();
@@ -314,7 +313,7 @@ export async function main() {
         return;
       }
 
-      networkHits.push({
+      pushNetworkHit({
         kind: "response",
         url,
         status: response.status(),
@@ -322,7 +321,7 @@ export async function main() {
         body: rankAssetPattern.test(url) ? undefined : text.slice(0, 1200)
       });
     } catch (error) {
-      networkHits.push({
+      pushNetworkHit({
         kind: "response-error",
         url,
         error: String(error)
@@ -334,7 +333,7 @@ export async function main() {
     ws.on("framereceived", ({ payload }) => {
       const text = typeof payload === "string" ? payload : "";
       if (matchesRankHint(text)) {
-        networkHits.push({
+        pushNetworkHit({
           kind: "websocket",
           url: ws.url(),
           body: text.slice(0, 1200)
@@ -351,7 +350,9 @@ export async function main() {
   let lastFingerprint = "";
 
   const saveSnapshot = async (reason) => {
-    const report = await buildReport(page, networkHits);
+    const report = await buildReport(page, networkHits, {
+      includeHeavyHints: reason === "initial"
+    });
     const watchedState = pickWatchedState(report);
     const fingerprint = JSON.stringify(watchedState);
     if (fingerprint === lastFingerprint) {
@@ -377,16 +378,17 @@ export async function main() {
 
   const shutdown = async () => {
     clearInterval(interval);
-    await browser.close();
-    process.exit(0);
+    if (ownsBrowser && browser) {
+      await browser.close();
+    }
+    if (manageProcessSignals) {
+      process.exit(0);
+    }
   };
 
-  process.on("SIGINT", () => {
-    shutdown().catch((error) => {
-      console.error(error);
-      process.exit(1);
-    });
-  });
+  if (manageProcessSignals) {
+    registerShutdown(shutdown);
+  }
 
   await new Promise(() => {});
 }

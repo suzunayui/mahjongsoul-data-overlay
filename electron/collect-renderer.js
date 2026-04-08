@@ -1,7 +1,8 @@
+const launchStatus = document.querySelector("#launch-status");
 const collectStatus = document.querySelector("#collect-status");
 const htmlDir = document.querySelector("#html-dir");
-const debugDir = document.querySelector("#debug-dir");
-const debugJsonPath = document.querySelector("#debug-json-path");
+const launchStartButton = document.querySelector("#launch-start");
+const launchStopButton = document.querySelector("#launch-stop");
 const collectStartButton = document.querySelector("#collect-start");
 const collectStopButton = document.querySelector("#collect-stop");
 const settingsStatus = document.querySelector("#settings-status");
@@ -23,7 +24,7 @@ if (!window.mahjongOverlayApp) {
 }
 
 function setStatusText(element, running) {
-  element.textContent = running ? "収集中" : "停止中";
+  element.textContent = running ? "起動中" : "停止中";
   element.style.color = running ? "#3dd598" : "#ebf2ff";
 }
 
@@ -44,9 +45,12 @@ function switchTab(target) {
 }
 
 function renderPaths(status) {
-  htmlDir.textContent = `OBS 用 HTML フォルダ: ${status.htmlDir || "-"}`;
-  debugDir.textContent = `デバッグ JSON フォルダ: ${status.debugOutputDir || "-"}`;
-  debugJsonPath.textContent = `最新 JSON: ${status.latestMatchDebugPath || "-"}`;
+  htmlDir.textContent = `OBS用HTMLフォルダ: ${status.htmlDir || "-"}`;
+}
+
+function setLaunchButtonState(running) {
+  launchStartButton.disabled = running;
+  launchStopButton.disabled = !running;
 }
 
 function setCollectButtonState(running) {
@@ -81,7 +85,9 @@ function collectFormSettings() {
 
 async function refreshStatus() {
   const status = await window.mahjongOverlayApp.getStatus();
+  setStatusText(launchStatus, status.launchRunning);
   setStatusText(collectStatus, status.collectRunning);
+  setLaunchButtonState(status.launchRunning);
   setCollectButtonState(status.collectRunning);
   renderPaths(status);
   setObsStatus(status);
@@ -136,6 +142,16 @@ obsInputSelect.addEventListener("change", () => {
   }
 });
 
+launchStartButton.addEventListener("click", async () => {
+  await window.mahjongOverlayApp.startLaunch();
+  await refreshStatus();
+});
+
+launchStopButton.addEventListener("click", async () => {
+  await window.mahjongOverlayApp.stopLaunch();
+  await refreshStatus();
+});
+
 collectStartButton.addEventListener("click", async () => {
   await window.mahjongOverlayApp.startCollect();
   await refreshStatus();
@@ -148,10 +164,6 @@ collectStopButton.addEventListener("click", async () => {
 
 document.querySelector("#open-html").addEventListener("click", async () => {
   await window.mahjongOverlayApp.openHtmlFolder();
-});
-
-document.querySelector("#open-debug").addEventListener("click", async () => {
-  await window.mahjongOverlayApp.openDebugFolder();
 });
 
 tabButtons.forEach((button) => {
@@ -177,7 +189,7 @@ document.querySelector("#save-obs-settings").addEventListener("click", async () 
     obsIntegration: collectFormSettings().obsIntegration
   };
   await window.mahjongOverlayApp.saveSettings(next);
-  setObsSettingsMessage("OBS 設定を保存しました");
+  setObsSettingsMessage("OBS設定を保存しました");
   await refreshStatus();
 });
 
@@ -190,7 +202,7 @@ document.querySelector("#obs-connect").addEventListener("click", async () => {
   await window.mahjongOverlayApp.saveSettings(next);
   try {
     await window.mahjongOverlayApp.connectObs();
-    setObsSettingsMessage("OBS に接続しました");
+    setObsSettingsMessage("OBSに接続しました");
   } catch (error) {
     setObsSettingsMessage(error?.message || String(error));
   }
@@ -199,7 +211,7 @@ document.querySelector("#obs-connect").addEventListener("click", async () => {
 
 document.querySelector("#obs-disconnect").addEventListener("click", async () => {
   await window.mahjongOverlayApp.disconnectObs();
-  setObsSettingsMessage("OBS を切断しました");
+  setObsSettingsMessage("OBSを切断しました");
   await refreshStatus();
 });
 
@@ -212,7 +224,7 @@ document.querySelector("#obs-play-test").addEventListener("click", async () => {
   await window.mahjongOverlayApp.saveSettings(next);
   try {
     await window.mahjongOverlayApp.playObsRiichi();
-    setObsSettingsMessage("メディアソースをテスト再生しました");
+    setObsSettingsMessage("メディアをテスト再生しました");
   } catch (error) {
     setObsSettingsMessage(error?.message || String(error));
   }
@@ -237,42 +249,45 @@ document.querySelector("#obs-refresh-inputs").addEventListener("click", async ()
 });
 
 document.querySelector("#reset-han").addEventListener("click", async () => {
-  const confirmed = window.confirm("翻数をリセットして大丈夫ですか？");
+  const confirmed = window.confirm("役数をリセットしますか？");
   if (!confirmed) {
     return;
   }
 
   await window.mahjongOverlayApp.resetHan();
-  setSettingsMessage("翻数をリセットしました");
+  setSettingsMessage("役数をリセットしました");
 });
 
 document.querySelector("#reset-records").addEventListener("click", async () => {
-  const confirmed = window.confirm("戦績をリセットして大丈夫ですか？");
+  const confirmed = window.confirm("順位をリセットしますか？");
   if (!confirmed) {
     return;
   }
 
   await window.mahjongOverlayApp.resetRecords();
-  setSettingsMessage("戦績をリセットしました");
+  setSettingsMessage("順位をリセットしました");
 });
 
 document.querySelector("#reset-points").addEventListener("click", async () => {
-  const confirmed = window.confirm("点数の開始値をリセットして大丈夫ですか？");
+  const confirmed = window.confirm("ポイント基準値をリセットしますか？");
   if (!confirmed) {
     return;
   }
 
   const result = await window.mahjongOverlayApp.resetPoints();
   if (result?.ok) {
-    setSettingsMessage("点数の開始値をリセットしました");
+    setSettingsMessage("ポイント基準値をリセットしました");
     return;
   }
 
-  setSettingsMessage(result?.message || "点数の開始値のリセットに失敗しました");
+  setSettingsMessage(result?.message || "ポイント基準値のリセットに失敗しました");
 });
 
 window.mahjongOverlayApp.onStatus((payload) => {
+  setStatusText(launchStatus, payload.launchRunning);
   setStatusText(collectStatus, payload.collectRunning);
+  setLaunchButtonState(payload.launchRunning);
+  setCollectButtonState(payload.collectRunning);
   renderPaths(payload);
   setObsStatus(payload);
 });
