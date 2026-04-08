@@ -16,6 +16,7 @@
   const borderColor = params.get("borderColor");
   const borderWidthRaw = Number(params.get("borderWidth"));
   const borderRadiusRaw = Number(params.get("borderRadius"));
+  const fontScaleRaw = Number(params.get("fontScale"));
   const fontFamily = params.get("fontFamily");
 
   const safeTextColor = /^#[0-9a-fA-F]{6}$/.test(textColor || "") ? textColor : "#f7f4eb";
@@ -36,6 +37,9 @@
   const safeBorderRadius = Number.isFinite(borderRadiusRaw)
     ? Math.max(0, Math.min(36, Math.round(borderRadiusRaw)))
     : 14;
+  const safeFontScale = Number.isFinite(fontScaleRaw)
+    ? Math.max(60, Math.min(200, Math.round(fontScaleRaw)))
+    : 100;
 
   const hexToRgb = (hex) => {
     const normalized = hex.replace("#", "");
@@ -56,6 +60,7 @@
   document.documentElement.style.setProperty("--runtime-border-color", safeBorderColor);
   document.documentElement.style.setProperty("--runtime-border-width", `${safeBorderWidth}px`);
   document.documentElement.style.setProperty("--runtime-border-radius", `${safeBorderRadius}px`);
+  document.documentElement.style.setProperty("--runtime-font-scale", String(safeFontScale / 100));
   document.documentElement.style.setProperty("--runtime-font-family", safeFontFamily);
 
   if (document.body) {

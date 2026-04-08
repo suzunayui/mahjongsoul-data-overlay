@@ -47,6 +47,7 @@ const defaultSettings = {
     borderColor: "#ffffff",
     borderWidth: 1,
     borderRadius: 14,
+    fontScale: 100,
     fontFamily: "Segoe UI, Meiryo UI, sans-serif"
   },
   obsIntegration: {
@@ -294,6 +295,10 @@ function normalizeOverlayStyleSettings(value) {
   const borderRadius = Number.isFinite(borderRadiusRaw)
     ? Math.max(0, Math.min(36, Math.round(borderRadiusRaw)))
     : defaultSettings.overlayStyle.borderRadius;
+  const fontScaleRaw = Number(source.fontScale);
+  const fontScale = Number.isFinite(fontScaleRaw)
+    ? Math.max(60, Math.min(200, Math.round(fontScaleRaw)))
+    : defaultSettings.overlayStyle.fontScale;
   const fontFamily =
     typeof source.fontFamily === "string" && source.fontFamily.trim().length > 0
       ? source.fontFamily.trim().slice(0, 120)
@@ -306,6 +311,7 @@ function normalizeOverlayStyleSettings(value) {
     borderColor,
     borderWidth,
     borderRadius,
+    fontScale,
     fontFamily
   };
 }
@@ -566,6 +572,11 @@ function computeBottomRowLayout(canvasWidth, canvasHeight, sources) {
 
 async function setupObsOverlaySources(settings) {
   const client = await ensureObsConnected(settings);
+  const overlayStyle = normalizeOverlayStyleSettings(settings?.overlayStyle);
+  const fontScale = Number.isFinite(Number(overlayStyle?.fontScale))
+    ? Math.max(60, Math.min(200, Number(overlayStyle.fontScale)))
+    : 100;
+  const sizeScale = fontScale / 100;
   const currentScene = await client.call("GetCurrentProgramScene");
   const sceneName = currentScene?.responseData?.currentProgramSceneName;
   if (!sceneName) {
@@ -598,26 +609,26 @@ async function setupObsOverlaySources(settings) {
     {
       inputName: "MJS Overlay Rank",
       route: "/obs/rank",
-      width: 580,
-      height: 150
+      width: Math.round(580 * sizeScale),
+      height: Math.round(150 * sizeScale)
     },
     {
       inputName: "MJS Overlay Points",
       route: "/obs/points",
-      width: 480,
-      height: 210
+      width: Math.round(480 * sizeScale),
+      height: Math.round(210 * sizeScale)
     },
     {
       inputName: "MJS Overlay Records",
       route: "/obs/records",
-      width: 330,
-      height: 100
+      width: Math.round(330 * sizeScale),
+      height: Math.round(100 * sizeScale)
     },
     {
       inputName: "MJS Overlay Han",
       route: "/obs/han",
-      width: 200,
-      height: 100
+      width: Math.round(200 * sizeScale),
+      height: Math.round(100 * sizeScale)
     }
   ];
 

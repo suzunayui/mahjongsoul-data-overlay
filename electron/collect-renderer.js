@@ -30,6 +30,8 @@ const designCustomBorderWidthValue = document.querySelector("#design-custom-bord
 const designCustomBorderRadius = document.querySelector("#design-custom-border-radius");
 const designCustomBorderRadiusValue = document.querySelector("#design-custom-border-radius-value");
 const designFontFamily = document.querySelector("#design-font-family");
+const designFontScale = document.querySelector("#design-font-scale");
+const designFontScaleValue = document.querySelector("#design-font-scale-value");
 const designGlobalInputs = [...document.querySelectorAll('input[name="design-global"]')];
 const tabButtons = [...document.querySelectorAll("[data-tab-target]")];
 const tabPanels = [...document.querySelectorAll("[data-tab-panel]")];
@@ -218,6 +220,9 @@ function applySettings(settings) {
   const fontFamily = normalizeFontFamilySelection(overlayStyle.fontFamily);
   ensureFontOption(fontFamily);
   designFontFamily.value = fontFamily;
+  const fontScale = normalizeInt(overlayStyle.fontScale, 60, 200, 100);
+  designFontScale.value = String(fontScale);
+  designFontScaleValue.textContent = String(fontScale);
 }
 
 function collectFormSettings() {
@@ -237,6 +242,7 @@ function collectFormSettings() {
       borderColor: normalizeHexColor(designCustomBorderColor.value, "#ffffff"),
       borderWidth: normalizeInt(designCustomBorderWidth.value, 0, 12, 1),
       borderRadius: normalizeInt(designCustomBorderRadius.value, 0, 36, 14),
+      fontScale: normalizeInt(designFontScale.value, 60, 200, 100),
       fontFamily:
         typeof designFontFamily.value === "string" && designFontFamily.value.trim().length > 0
           ? normalizeFontFamilySelection(designFontFamily.value)
@@ -429,6 +435,10 @@ designCustomBorderRadius.addEventListener("input", () => {
   designCustomBorderRadiusValue.textContent = String(
     normalizeInt(designCustomBorderRadius.value, 0, 36, 14)
   );
+  scheduleAutoSaveDesign();
+});
+designFontScale.addEventListener("input", () => {
+  designFontScaleValue.textContent = String(normalizeInt(designFontScale.value, 60, 200, 100));
   scheduleAutoSaveDesign();
 });
 

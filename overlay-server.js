@@ -42,6 +42,7 @@ const defaultOverlayStyle = {
   borderColor: "#ffffff",
   borderWidth: 1,
   borderRadius: 14,
+  fontScale: 100,
   fontFamily: "Segoe UI, Meiryo UI, sans-serif"
 };
 
@@ -116,6 +117,10 @@ function normalizeOverlayStyle(value) {
   const borderRadius = Number.isFinite(borderRadiusRaw)
     ? Math.max(0, Math.min(36, Math.round(borderRadiusRaw)))
     : defaultOverlayStyle.borderRadius;
+  const fontScaleRaw = Number(source.fontScale);
+  const fontScale = Number.isFinite(fontScaleRaw)
+    ? Math.max(60, Math.min(200, Math.round(fontScaleRaw)))
+    : defaultOverlayStyle.fontScale;
   const fontFamily =
     typeof source.fontFamily === "string" && source.fontFamily.trim().length > 0
       ? source.fontFamily.trim().slice(0, 120)
@@ -128,6 +133,7 @@ function normalizeOverlayStyle(value) {
     borderColor,
     borderWidth,
     borderRadius,
+    fontScale,
     fontFamily
   };
 }
@@ -224,6 +230,7 @@ function buildObsEmbedHtml(route) {
           params.set("borderColor", style?.borderColor || "#ffffff");
           params.set("borderWidth", String(style?.borderWidth ?? 1));
           params.set("borderRadius", String(style?.borderRadius ?? 14));
+          params.set("fontScale", String(style?.fontScale ?? 100));
           params.set("borderOpacity", String(style?.backgroundOpacity ?? style?.borderOpacity ?? 20));
           params.set("fontFamily", style?.fontFamily || "Segoe UI, Meiryo UI, sans-serif");
           return \`/\${route}?\${params.toString()}\`;
