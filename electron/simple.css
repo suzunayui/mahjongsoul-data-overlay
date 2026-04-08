@@ -27,7 +27,8 @@ body {
 
 .app.simple {
   width: min(760px, calc(100vw - 32px));
-  margin: 24px auto;
+  margin: 0 auto 24px;
+  padding-top: 74px;
 }
 
 .panel {
@@ -68,10 +69,17 @@ h1 {
   display: flex;
   gap: 8px;
   padding: 8px 10px 0;
-  border-radius: 16px 16px 0 0;
+  border-radius: 0 0 16px 16px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
   border: 1px solid var(--border);
-  border-bottom: 0;
+  border-top: 0;
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(760px, calc(100vw - 32px));
+  z-index: 40;
+  backdrop-filter: blur(10px);
 }
 
 .tab-button {
@@ -122,6 +130,21 @@ h1 {
   gap: 10px;
 }
 
+.obs-toggle-row button {
+  min-width: 84px;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+.row-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  font-size: 14px;
+}
+
 .step-list {
   margin: 0;
   padding-left: 22px;
@@ -146,6 +169,38 @@ h1 {
 .settings-label {
   margin: 0;
   font-weight: 700;
+}
+
+.design-toggle {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.design-toggle label {
+  cursor: pointer;
+}
+
+.design-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.design-toggle span {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(122, 162, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  transition: 120ms ease;
+}
+
+.design-toggle input:checked + span {
+  color: var(--text);
+  border-color: rgba(122, 162, 255, 0.5);
+  background: linear-gradient(135deg, rgba(89, 166, 255, 0.24), rgba(31, 127, 255, 0.24));
 }
 
 .radio-row {
@@ -176,6 +231,16 @@ h1 {
   gap: 14px;
 }
 
+.two-col-fields {
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+}
+
+@media (max-width: 720px) {
+  .two-col-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
 .field-group {
   display: grid;
   gap: 8px;
@@ -188,6 +253,8 @@ h1 {
 
 input[type="text"],
 input[type="password"],
+input[type="color"],
+input[type="range"],
 select {
   appearance: none;
   width: 100%;
@@ -197,6 +264,27 @@ select {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   font: inherit;
+}
+
+select option {
+  color: #0b0f14;
+  background: #ffffff;
+}
+
+input[type="color"] {
+  padding: 4px;
+  height: 42px;
+}
+
+input[type="range"] {
+  padding: 0;
+  height: 28px;
+  accent-color: #59a6ff;
+}
+
+.field-inline-note {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 input[type="text"]::placeholder,

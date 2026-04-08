@@ -12,9 +12,11 @@ contextBridge.exposeInMainWorld("mahjongOverlayApp", {
   disconnectObs: () => ipcRenderer.invoke("obs:disconnect"),
   playObsRiichi: () => ipcRenderer.invoke("obs:playRiichi"),
   listObsInputs: () => ipcRenderer.invoke("obs:listInputs"),
+  setupObsOverlaySources: () => ipcRenderer.invoke("obs:setupOverlaySources"),
   resetHan: () => ipcRenderer.invoke("han:reset"),
   resetRecords: () => ipcRenderer.invoke("records:reset"),
   resetPoints: () => ipcRenderer.invoke("points:reset"),
+  listSystemFonts: () => ipcRenderer.invoke("fonts:listSystem"),
   getStatus: () => ipcRenderer.invoke("app:getStatus"),
   onStatus: (callback) => {
     ipcRenderer.on("app:status", (_event, payload) => callback(payload));

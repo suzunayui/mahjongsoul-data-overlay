@@ -7,6 +7,22 @@
   --accent: #f2c66d;
 }
 
+:root[data-theme="cool"] {
+  --bg: rgba(5, 16, 28, 0.78);
+  --border: rgba(97, 218, 255, 0.3);
+  --text: #e9f8ff;
+  --muted: #a8c7d6;
+  --accent: #59d2ff;
+}
+
+:root[data-theme="cute"] {
+  --bg: rgba(58, 26, 58, 0.72);
+  --border: rgba(255, 194, 233, 0.45);
+  --text: #fff1fb;
+  --muted: #ffd8f0;
+  --accent: #ff9fda;
+}
+
 html,
 body {
   margin: 0;
@@ -14,7 +30,7 @@ body {
   height: 100%;
   background: transparent;
   overflow: hidden;
-  font-family: "Segoe UI", "Meiryo UI", sans-serif;
+  font-family: var(--runtime-font-family, "Segoe UI", "Meiryo UI", sans-serif);
 }
 
 .overlay {
@@ -32,11 +48,66 @@ body {
   max-width: max-content;
   padding: 12px 16px;
   color: var(--text);
-  background: linear-gradient(180deg, rgba(16, 25, 40, 0.88), var(--bg));
-  border: 1px solid var(--border);
+  background: var(--bg);
+  border: 1px solid var(--runtime-border, var(--border));
   border-radius: 14px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(8px);
+}
+
+:root[data-theme="cool"] .card {
+  border-radius: 10px;
+  background: linear-gradient(170deg, rgba(7, 24, 40, 0.92), var(--bg));
+  box-shadow: 0 14px 34px rgba(0, 26, 48, 0.42);
+}
+
+:root[data-theme="cute"] .card {
+  border-radius: 18px;
+  background: linear-gradient(165deg, rgba(86, 32, 86, 0.9), var(--bg));
+  box-shadow: 0 12px 28px rgba(96, 20, 80, 0.34);
+}
+
+:root[data-theme="frameless_white"] .card,
+:root[data-theme="frameless_black"] .card {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 4px 8px;
+  backdrop-filter: none;
+}
+
+:root[data-theme="frameless_white"] .line,
+:root[data-theme="frameless_white"] .label,
+:root[data-theme="frameless_white"] .points-label,
+:root[data-theme="frameless_white"] .points-score {
+  color: #ffffff !important;
+  text-shadow: 0 0 7px rgba(0, 0, 0, 0.38);
+}
+
+:root[data-theme="frameless_black"] .line,
+:root[data-theme="frameless_black"] .label,
+:root[data-theme="frameless_black"] .points-label,
+:root[data-theme="frameless_black"] .points-score {
+  color: #111111 !important;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.45);
+}
+
+:root[data-theme="custom"] .card {
+  color: var(--custom-text, #f7f4eb);
+  background: var(--runtime-bg, var(--bg));
+  border-style: solid;
+  border-color: var(--runtime-border-color, var(--border));
+  border-width: var(--runtime-border-width, 1px);
+  border-radius: var(--runtime-border-radius, 14px);
+}
+
+:root[data-theme="custom"] .line,
+:root[data-theme="custom"] .label,
+:root[data-theme="custom"] .points-label,
+:root[data-theme="custom"] .points-score,
+:root[data-theme="custom"] .delta,
+:root[data-theme="custom"] .subtle {
+  color: var(--custom-text, #f7f4eb) !important;
 }
 
 .label {
@@ -52,7 +123,7 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  font-size: 28px;
+  font-size: 34px;
   font-weight: 800;
   line-height: 1.25;
   white-space: nowrap;
@@ -78,7 +149,7 @@ body {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .han-chip strong {
@@ -111,7 +182,7 @@ body {
 
 .points-line {
   justify-content: center;
-  font-size: 24px;
+  font-size: 30px;
 }
 
 .points-label {
