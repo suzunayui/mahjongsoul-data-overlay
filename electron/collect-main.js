@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -14,6 +14,7 @@ const launchScript = path.join(repoRoot, "mjs-launch.js");
 const collectScript = path.join(repoRoot, "mjs-collect-with-overlay.js");
 const htmlDir = path.join(repoRoot, "html");
 const debugPort = Number(process.env.CHROME_DEBUG_PORT || 9222);
+const overlayPort = Number(process.env.OVERLAY_PORT || 4173);
 function getAppDataDir() {
   return app.getPath("userData");
 }
@@ -33,6 +34,21 @@ const riichiWatchPollMs = Number(process.env.MJS_RIICHI_WATCH_POLL_MS || 250);
 
 const defaultSettings = {
   hanCountScope: "all_players",
+  overlayDesign: {
+    rank: "normal",
+    points: "normal",
+    records: "normal",
+    han: "normal"
+  },
+  overlayStyle: {
+    textColor: "#f7f4eb",
+    backgroundColor: "#ffffff",
+    backgroundOpacity: 20,
+    borderColor: "#ffffff",
+    borderWidth: 1,
+    borderRadius: 14,
+    fontFamily: "Segoe UI, Meiryo UI, sans-serif"
+  },
   obsIntegration: {
     enabled: false,
     websocketUrl: "ws://127.0.0.1:4455",
@@ -54,6 +70,7 @@ let obsClient = null;
 let riichiWatchInterval = null;
 let lastRiichiEventAt = "";
 let riichiWatchBusy = false;
+let cachedSystemFonts = null;
 
 function base64Sha256(value) {
   return crypto.createHash("sha256").update(value).digest("base64");
@@ -231,6 +248,68 @@ function normalizeObsIntegrationSettings(value) {
   };
 }
 
+function normalizeOverlayDesignSettings(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const normalizeTheme = (theme) =>
+    theme === "frameless_white" ||
+    theme === "frameless_black" ||
+    theme === "custom"
+      ? theme
+      : "normal";
+  return {
+    rank: normalizeTheme(source.rank),
+    points: normalizeTheme(source.points),
+    records: normalizeTheme(source.records),
+    han: normalizeTheme(source.han)
+  };
+}
+
+function normalizeOverlayStyleSettings(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const textColor =
+    typeof source.textColor === "string" && /^#[0-9a-fA-F]{6}$/.test(source.textColor)
+      ? source.textColor
+      : defaultSettings.overlayStyle.textColor;
+  const backgroundColor =
+    typeof source.backgroundColor === "string" && /^#[0-9a-fA-F]{6}$/.test(source.backgroundColor)
+      ? source.backgroundColor
+      : typeof source.borderColor === "string" && /^#[0-9a-fA-F]{6}$/.test(source.borderColor)
+        ? source.borderColor
+        : defaultSettings.overlayStyle.backgroundColor;
+  const backgroundOpacityRaw = Number(
+    source.backgroundOpacity != null ? source.backgroundOpacity : source.borderOpacity
+  );
+  const backgroundOpacity = Number.isFinite(backgroundOpacityRaw)
+    ? Math.max(0, Math.min(100, Math.round(backgroundOpacityRaw)))
+    : defaultSettings.overlayStyle.backgroundOpacity;
+  const borderColor =
+    typeof source.borderColor === "string" && /^#[0-9a-fA-F]{6}$/.test(source.borderColor)
+      ? source.borderColor
+      : defaultSettings.overlayStyle.borderColor;
+  const borderWidthRaw = Number(source.borderWidth);
+  const borderWidth = Number.isFinite(borderWidthRaw)
+    ? Math.max(0, Math.min(12, Math.round(borderWidthRaw)))
+    : defaultSettings.overlayStyle.borderWidth;
+  const borderRadiusRaw = Number(source.borderRadius);
+  const borderRadius = Number.isFinite(borderRadiusRaw)
+    ? Math.max(0, Math.min(36, Math.round(borderRadiusRaw)))
+    : defaultSettings.overlayStyle.borderRadius;
+  const fontFamily =
+    typeof source.fontFamily === "string" && source.fontFamily.trim().length > 0
+      ? source.fontFamily.trim().slice(0, 120)
+      : defaultSettings.overlayStyle.fontFamily;
+
+  return {
+    textColor,
+    backgroundColor,
+    backgroundOpacity,
+    borderColor,
+    borderWidth,
+    borderRadius,
+    fontFamily
+  };
+}
+
 async function readSettings() {
   try {
     const raw = await fs.promises.readFile(settingsPath, "utf8");
@@ -239,11 +318,15 @@ async function readSettings() {
       ...defaultSettings,
       ...parsed
     };
+    merged.overlayDesign = normalizeOverlayDesignSettings(merged.overlayDesign);
+    merged.overlayStyle = normalizeOverlayStyleSettings(merged.overlayStyle);
     merged.obsIntegration = normalizeObsIntegrationSettings(merged.obsIntegration);
     return merged;
   } catch {
     return {
       ...defaultSettings,
+      overlayDesign: normalizeOverlayDesignSettings(defaultSettings.overlayDesign),
+      overlayStyle: normalizeOverlayStyleSettings(defaultSettings.overlayStyle),
       obsIntegration: normalizeObsIntegrationSettings(defaultSettings.obsIntegration)
     };
   }
@@ -254,6 +337,8 @@ async function writeSettings(nextSettings) {
     ...defaultSettings,
     ...(nextSettings || {})
   };
+  merged.overlayDesign = normalizeOverlayDesignSettings(merged.overlayDesign);
+  merged.overlayStyle = normalizeOverlayStyleSettings(merged.overlayStyle);
   merged.obsIntegration = normalizeObsIntegrationSettings(merged.obsIntegration);
   await fs.promises.mkdir(configDir, { recursive: true });
   await fs.promises.writeFile(settingsPath, `${JSON.stringify(merged, null, 2)}\n`, "utf8");
@@ -266,6 +351,72 @@ function getDateKey() {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function listSystemFonts() {
+  if (Array.isArray(cachedSystemFonts)) {
+    return Promise.resolve(cachedSystemFonts);
+  }
+
+  if (process.platform !== "win32") {
+    cachedSystemFonts = [
+      "Segoe UI",
+      "Meiryo UI",
+      "Yu Gothic UI",
+      "Yu Gothic",
+      "Meiryo"
+    ];
+    return Promise.resolve(cachedSystemFonts);
+  }
+
+  const command = `
+$paths = @(
+  'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts',
+  'HKCU:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts'
+);
+$all = @();
+foreach ($path in $paths) {
+  if (Test-Path $path) {
+    $all += (Get-ItemProperty -Path $path | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty Name);
+  }
+}
+$clean = $all |
+  ForEach-Object { ($_ -replace '\\s*\\(.*\\)$','').Trim() } |
+  Where-Object { $_ -and $_.Length -gt 0 } |
+  Sort-Object -Unique;
+$clean -join [Environment]::NewLine
+`;
+
+  return new Promise((resolve) => {
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+      { windowsHide: true, maxBuffer: 1024 * 1024 * 4 },
+      (error, stdout) => {
+        if (error) {
+          cachedSystemFonts = [
+            "Segoe UI",
+            "Meiryo UI",
+            "Yu Gothic UI",
+            "Yu Gothic",
+            "Meiryo"
+          ];
+          resolve(cachedSystemFonts);
+          return;
+        }
+
+        const fonts = String(stdout || "")
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+        const merged = Array.from(
+          new Set(["Segoe UI", "Meiryo UI", "Yu Gothic UI", "Yu Gothic", "Meiryo", ...fonts])
+        );
+        cachedSystemFonts = merged;
+        resolve(merged);
+      }
+    );
+  });
 }
 
 function sendStatus() {
@@ -292,7 +443,7 @@ function setObsStatus(nextStatus) {
 async function ensureObsConnected(settings) {
   const obsIntegration = normalizeObsIntegrationSettings(settings?.obsIntegration);
   if (!obsIntegration.enabled) {
-    throw new Error("OBS???OFF??");
+    throw new Error("OBS連携がOFFです");
   }
 
   if (
@@ -312,7 +463,7 @@ async function ensureObsConnected(settings) {
     connecting: true,
     connected: false,
     websocketUrl: obsIntegration.websocketUrl,
-    message: "???..."
+    message: "接続中..."
   });
 
   try {
@@ -321,7 +472,7 @@ async function ensureObsConnected(settings) {
       connecting: false,
       connected: true,
       websocketUrl: obsIntegration.websocketUrl,
-      message: "????"
+      message: "接続済み"
     });
     return obsClient;
   } catch (error) {
@@ -344,14 +495,14 @@ async function disconnectObs() {
   setObsStatus({
     connecting: false,
     connected: false,
-    message: "???"
+    message: "未接続"
   });
 }
 
 async function playObsRiichiMedia(settings) {
   const obsIntegration = normalizeObsIntegrationSettings(settings?.obsIntegration);
   if (!obsIntegration.mediaSourceName) {
-    throw new Error("OBS ???????????????");
+    throw new Error("OBS のメディアソース名が未設定です");
   }
 
   const client = await ensureObsConnected(settings);
@@ -360,7 +511,7 @@ async function playObsRiichiMedia(settings) {
     mediaAction: "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART"
   });
   setObsStatus({
-    message: `??: ${obsIntegration.mediaSourceName}`
+    message: `再生: ${obsIntegration.mediaSourceName}`
   });
 }
 
@@ -373,6 +524,219 @@ async function listObsInputs(settings) {
     inputKind: input.inputKind ?? "",
     unversionedInputKind: input.unversionedInputKind ?? ""
   }));
+}
+
+function getOverlayBaseUrl() {
+  return `http://127.0.0.1:${overlayPort}`;
+}
+
+function computeBottomRowLayout(canvasWidth, canvasHeight, sources) {
+  const margin = 16;
+  const gap = 12;
+  const order = [
+    "MJS Overlay Han",
+    "MJS Overlay Records",
+    "MJS Overlay Points",
+    "MJS Overlay Rank"
+  ];
+  const byName = new Map(sources.map((source) => [source.inputName, source]));
+  const orderedSources = order.map((name) => byName.get(name)).filter(Boolean);
+  const totalWidth =
+    orderedSources.reduce((sum, source) => sum + source.width, 0) + gap * (orderedSources.length - 1);
+  const maxHeight = Math.max(...orderedSources.map((source) => source.height));
+  const usableWidth = Math.max(1, canvasWidth - margin * 2);
+  const usableHeight = Math.max(1, canvasHeight - margin * 2);
+  const scale = Math.max(0.2, Math.min(1, usableWidth / totalWidth, usableHeight / maxHeight));
+
+  const placements = [];
+  let x = margin;
+  const y = Math.max(margin, canvasHeight - margin - maxHeight * scale);
+  for (const source of orderedSources) {
+    placements.push({
+      inputName: source.inputName,
+      x,
+      y,
+      scaleX: scale,
+      scaleY: scale
+    });
+    x += source.width * scale + gap;
+  }
+  return placements;
+}
+
+async function setupObsOverlaySources(settings) {
+  const client = await ensureObsConnected(settings);
+  const currentScene = await client.call("GetCurrentProgramScene");
+  const sceneName = currentScene?.responseData?.currentProgramSceneName;
+  if (!sceneName) {
+    throw new Error("OBS の現在シーン名を取得できませんでした");
+  }
+
+  const inputListResponse = await client.call("GetInputList");
+  const inputList = Array.isArray(inputListResponse?.responseData?.inputs)
+    ? inputListResponse.responseData.inputs
+    : [];
+  const inputMap = new Map(
+    inputList
+      .filter((input) => input?.inputName)
+      .map((input) => [
+        input.inputName,
+        (input.unversionedInputKind || input.inputKind || "").toLowerCase()
+      ])
+  );
+
+  const sceneItemListResponse = await client.call("GetSceneItemList", { sceneName });
+  const sceneItemSourceNames = new Set(
+    Array.isArray(sceneItemListResponse?.responseData?.sceneItems)
+      ? sceneItemListResponse.responseData.sceneItems
+          .map((item) => item?.sourceName)
+          .filter((name) => typeof name === "string" && name.length > 0)
+      : []
+  );
+
+  const sources = [
+    {
+      inputName: "MJS Overlay Rank",
+      route: "/obs/rank",
+      width: 580,
+      height: 150
+    },
+    {
+      inputName: "MJS Overlay Points",
+      route: "/obs/points",
+      width: 480,
+      height: 210
+    },
+    {
+      inputName: "MJS Overlay Records",
+      route: "/obs/records",
+      width: 330,
+      height: 100
+    },
+    {
+      inputName: "MJS Overlay Han",
+      route: "/obs/han",
+      width: 200,
+      height: 100
+    }
+  ];
+
+  const updated = [];
+  const created = [];
+  const linkedToScene = [];
+
+  for (const source of sources) {
+    const existingKind = inputMap.get(source.inputName);
+    const isBrowserSource =
+      !existingKind || existingKind === "browser_source" || existingKind === "browser_source_v2";
+    if (!isBrowserSource) {
+      throw new Error(
+        `${source.inputName} は Browser Source ではありません（${existingKind}）`
+      );
+    }
+
+    const inputSettings = {
+      url: `${getOverlayBaseUrl()}${source.route}`,
+      width: source.width,
+      height: source.height,
+      reroute_audio: false,
+      restart_when_active: true,
+      shutdown: false
+    };
+
+    if (existingKind) {
+      await client.call("SetInputSettings", {
+        inputName: source.inputName,
+        inputSettings,
+        overlay: true
+      });
+      updated.push(source.inputName);
+    } else {
+      await client.call("CreateInput", {
+        sceneName,
+        inputName: source.inputName,
+        inputKind: "browser_source",
+        inputSettings,
+        sceneItemEnabled: true
+      });
+      created.push(source.inputName);
+      sceneItemSourceNames.add(source.inputName);
+    }
+
+    if (!sceneItemSourceNames.has(source.inputName)) {
+      await client.call("CreateSceneItem", {
+        sceneName,
+        sourceName: source.inputName,
+        sceneItemEnabled: true
+      });
+      linkedToScene.push(source.inputName);
+      sceneItemSourceNames.add(source.inputName);
+    }
+  }
+
+  const sceneItemListAfterResponse = await client.call("GetSceneItemList", { sceneName });
+  const sceneItems = Array.isArray(sceneItemListAfterResponse?.responseData?.sceneItems)
+    ? sceneItemListAfterResponse.responseData.sceneItems
+    : [];
+  const sceneItemIdBySource = new Map(
+    sceneItems
+      .filter((item) => typeof item?.sourceName === "string" && Number.isFinite(item?.sceneItemId))
+      .map((item) => [item.sourceName, item.sceneItemId])
+  );
+
+  let canvasWidth = 1920;
+  let canvasHeight = 1080;
+  try {
+    const videoSettings = await client.call("GetVideoSettings");
+    const baseWidth = Number(videoSettings?.responseData?.baseWidth);
+    const baseHeight = Number(videoSettings?.responseData?.baseHeight);
+    if (Number.isFinite(baseWidth) && baseWidth > 0) {
+      canvasWidth = baseWidth;
+    }
+    if (Number.isFinite(baseHeight) && baseHeight > 0) {
+      canvasHeight = baseHeight;
+    }
+  } catch {
+    // Keep default canvas size when OBS does not return video settings.
+  }
+
+  const placements = computeBottomRowLayout(canvasWidth, canvasHeight, sources);
+  for (const placement of placements) {
+    const sceneItemId = sceneItemIdBySource.get(placement.inputName);
+    if (!sceneItemId) {
+      continue;
+    }
+    await client.call("SetSceneItemTransform", {
+      sceneName,
+      sceneItemId,
+      sceneItemTransform: {
+        positionX: placement.x,
+        positionY: placement.y,
+        scaleX: placement.scaleX,
+        scaleY: placement.scaleY
+      }
+    });
+  }
+
+  return {
+    ok: true,
+    sceneName,
+    updated,
+    created,
+    linkedToScene,
+    sources: sources.map((source) => ({
+      name: source.inputName,
+      url: `${getOverlayBaseUrl()}${source.route}`,
+      width: source.width,
+      height: source.height
+    })),
+    layout: {
+      canvasWidth,
+      canvasHeight,
+      placements
+    },
+    obs: obsStatus
+  };
 }
 
 async function checkRiichiTrigger() {
@@ -595,7 +959,7 @@ ipcMain.handle("collect:stop", async () => {
 
 ipcMain.handle("folder:openHtml", async () => {
   if (!fs.existsSync(htmlDir)) {
-    return { ok: false, message: "html ????????????" };
+    return { ok: false, message: "html フォルダが見つかりません" };
   }
 
   await shell.openPath(htmlDir);
@@ -639,6 +1003,11 @@ ipcMain.handle("obs:listInputs", async () => {
   const settings = await readSettings();
   const inputs = await listObsInputs(settings);
   return { ok: true, inputs, obs: obsStatus };
+});
+
+ipcMain.handle("obs:setupOverlaySources", async () => {
+  const settings = await readSettings();
+  return await setupObsOverlaySources(settings);
 });
 
 ipcMain.handle("han:reset", async () => {
@@ -699,7 +1068,7 @@ ipcMain.handle("points:reset", async () => {
   const nextBase = latest || start;
 
   if (!nextBase) {
-    return { ok: false, message: "?????????????????????" };
+    return { ok: false, message: "表示に使える段位ポイントデータがありません" };
   }
 
   await writeJsonFile(startPath, nextBase);
@@ -715,6 +1084,11 @@ ipcMain.handle("app:getStatus", async () => ({
   htmlDir,
   obs: obsStatus
 }));
+
+ipcMain.handle("fonts:listSystem", async () => {
+  const fonts = await listSystemFonts();
+  return { ok: true, fonts };
+});
 
 app.whenReady().then(() => {
   createWindow();

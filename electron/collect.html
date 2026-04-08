@@ -9,43 +9,58 @@
   <body>
     <main class="app simple">
       <section class="panel simple-panel">
-        <p class="eyebrow">MahjongSoul Data Overlay</p>
-        <h1>かんたん開始</h1>
         <div class="tab-row">
-          <button class="tab-button is-active" data-tab-target="quick">かんたん開始</button>
+          <button class="tab-button is-active" data-tab-target="quick">開始</button>
           <button class="tab-button" data-tab-target="settings">設定</button>
-          <button class="tab-button" data-tab-target="obs">OBS連携</button>
+          <button class="tab-button" data-tab-target="obs">リーチ演出</button>
+          <button class="tab-button" data-tab-target="design">デザイン</button>
         </div>
 
         <section class="tab-panel is-active" data-tab-panel="quick">
-          <p class="lead">順番に押すだけで準備できます。</p>
-          <div class="status-line">
-            <span>雀魂起動</span>
-            <strong id="launch-status">停止中</strong>
-          </div>
-          <div class="status-line">
-            <span>データ取得</span>
-            <strong id="collect-status">停止中</strong>
-          </div>
+          <p class="lead">順番に押すだけで開始できます。</p>
           <ol class="step-list">
             <li>
               <strong>1. 雀魂起動</strong>
               <div class="button-row">
                 <button id="launch-start" class="primary">雀魂起動</button>
-                <button id="launch-stop">停止</button>
+                <button id="launch-stop" class="danger">停止</button>
+                <strong id="launch-status" class="row-status">停止中</strong>
               </div>
             </li>
             <li>
-              <strong>2. データ取得開始</strong>
+              <strong>2. データ取得開始（雀魂を起動してホーム画面になったら押してください）</strong>
               <div class="button-row">
                 <button id="collect-start" class="primary">データ取得開始</button>
                 <button id="collect-stop" class="danger">停止</button>
+                <strong id="collect-status" class="row-status">停止中</strong>
               </div>
             </li>
             <li>
-              <strong>3. OBS用のHTMLフォルダを開く</strong>
+              <strong>3. OBS連携</strong>
+              <p class="hint">
+                OBSで「ツール → WebSocketサーバー設定」を開き、「WebSocketサーバーを有効にする」にチェックし、
+                「接続情報を表示」からサーバーパスワードをコピーして、下のパスワード欄に貼り付けてください。
+              </p>
+              <div class="settings-card form-card two-col-fields">
+                <label class="field-group">
+                  <span class="field-label">WebSocket URL</span>
+                  <input id="obs-websocket-url" type="text" placeholder="ws://127.0.0.1:4455" />
+                </label>
+                <label class="field-group">
+                  <span class="field-label">パスワード</span>
+                  <input id="obs-password" type="password" placeholder="未設定なら空欄" />
+                </label>
+              </div>
               <div class="button-row">
-                <button id="open-html">OBS用HTMLフォルダを開く</button>
+                <button id="quick-obs-connect" class="primary">OBS連携</button>
+                <button id="quick-obs-disconnect" class="danger">停止</button>
+                <strong id="quick-obs-status" class="row-status">停止中</strong>
+              </div>
+            </li>
+            <li>
+              <strong>4. ソース追加</strong>
+              <div class="button-row">
+                <button id="quick-obs-setup-sources" class="primary">ソース追加</button>
               </div>
             </li>
           </ol>
@@ -53,9 +68,9 @@
         </section>
 
         <section class="tab-panel" data-tab-panel="settings">
-          <p class="lead">役数カウントの範囲やリセット操作を行います。</p>
+          <p class="lead">翻数カウントの範囲やリセット操作を行います。</p>
           <div class="settings-card">
-            <p class="settings-label">役数の数え方</p>
+            <p class="settings-label">翻数の数え方</p>
             <label class="radio-row">
               <input type="radio" name="han-count-scope" value="all_players" />
               <span>全プレイヤー分をカウント</span>
@@ -69,65 +84,84 @@
               <span>自分の和了を加算し、放銃分を減算</span>
             </label>
           </div>
-          <div class="button-row">
-            <button id="save-settings" class="primary">設定を保存</button>
-            <button id="reset-han">役数をリセット</button>
-          </div>
-          <div class="button-row">
-            <button id="reset-records">順位をリセット</button>
-            <button id="reset-points">ポイント基準値をリセット</button>
+          <div class="settings-card">
+            <p class="settings-label">リセット</p>
+            <div class="button-row">
+              <button id="reset-han">翻数をリセット</button>
+              <button id="reset-records">戦績をリセット</button>
+              <button id="reset-points">ポイント基準値をリセット</button>
+            </div>
           </div>
           <p class="hint" id="settings-status"></p>
         </section>
 
         <section class="tab-panel" data-tab-panel="obs">
-          <p class="lead">OBS WebSocket に接続し、リーチ演出のメディア再生を設定します。</p>
-          <div class="status-line">
-            <span>OBS 接続</span>
-            <strong id="obs-status">未接続</strong>
+          <div class="button-row obs-toggle-row">
+            <button id="obs-tab-on">ON</button>
+            <button id="obs-tab-off" class="danger">OFF</button>
           </div>
-          <p class="hint" id="obs-status-message"></p>
+          <div id="obs-tab-content">
+            <div class="settings-card form-card">
+              <label class="field-group">
+                <span class="field-label">メディアソース名</span>
+                <select id="obs-input-select">
+                  <option value="">ソース一覧を取得してください</option>
+                </select>
+              </label>
+            </div>
+            <div class="button-row">
+              <button id="obs-play-test">テスト再生</button>
+            </div>
+            <p class="hint" id="obs-settings-status"></p>
+          </div>
+        </section>
+
+        <section class="tab-panel" data-tab-panel="design">
+          <p class="lead">OBS表示のデザインを全オーバーレイで一括切り替えします。</p>
           <div class="settings-card">
-            <p class="settings-label">連携オン/オフ</p>
-            <label class="checkbox-row">
-              <input type="checkbox" id="obs-enabled" />
-              <span>連携を有効にする</span>
-            </label>
+            <p class="settings-label">全体デザイン</p>
+            <div class="design-toggle" id="design-global">
+              <label><input type="radio" name="design-global" value="normal" /><span>通常</span></label>
+              <label><input type="radio" name="design-global" value="frameless_white" /><span>枠なし文字白</span></label>
+              <label><input type="radio" name="design-global" value="frameless_black" /><span>枠なし文字黒</span></label>
+              <label><input type="radio" name="design-global" value="custom" /><span>カスタム</span></label>
+            </div>
           </div>
           <div class="settings-card form-card">
+            <p class="settings-label">カスタム詳細（カスタム選択時に反映）</p>
             <label class="field-group">
-              <span class="field-label">WebSocket URL</span>
-              <input id="obs-websocket-url" type="text" placeholder="ws://127.0.0.1:4455" />
+              <span class="field-label">文字色</span>
+              <input id="design-text-color" type="color" value="#f7f4eb" />
             </label>
             <label class="field-group">
-              <span class="field-label">パスワード</span>
-              <input id="obs-password" type="password" placeholder="未設定なら空欄" />
+              <span class="field-label">背景色</span>
+              <input id="design-border-color" type="color" value="#ffffff" />
             </label>
             <label class="field-group">
-              <span class="field-label">メディアソース名</span>
-              <input
-                id="obs-media-source-name"
-                type="text"
-                list="obs-input-list"
-                placeholder="例: リーチ演出"
-              />
-              <datalist id="obs-input-list"></datalist>
+              <span class="field-label">背景の透明度</span>
+              <input id="design-border-opacity" type="range" min="0" max="100" step="1" value="20" />
+              <span class="field-inline-note"><span id="design-border-opacity-value">20</span>%</span>
             </label>
             <label class="field-group">
-              <span class="field-label">OBS ソース一覧</span>
-              <select id="obs-input-select">
-                <option value="">ソース一覧を取得してください</option>
-              </select>
+              <span class="field-label">ボーダーの色</span>
+              <input id="design-custom-border-color" type="color" value="#ffffff" />
+            </label>
+            <label class="field-group">
+              <span class="field-label">ボーダーの太さ</span>
+              <input id="design-custom-border-width" type="range" min="0" max="12" step="1" value="1" />
+              <span class="field-inline-note"><span id="design-custom-border-width-value">1</span>px</span>
+            </label>
+            <label class="field-group">
+              <span class="field-label">角丸</span>
+              <input id="design-custom-border-radius" type="range" min="0" max="36" step="1" value="14" />
+              <span class="field-inline-note"><span id="design-custom-border-radius-value">14</span>px</span>
+            </label>
+            <label class="field-group">
+              <span class="field-label">フォント（インストール済み）</span>
+              <select id="design-font-family"></select>
             </label>
           </div>
-          <div class="button-row">
-            <button id="save-obs-settings" class="primary">OBS設定を保存</button>
-            <button id="obs-connect">接続</button>
-            <button id="obs-disconnect">切断</button>
-            <button id="obs-refresh-inputs">ソース一覧を取得</button>
-            <button id="obs-play-test">テスト再生</button>
-          </div>
-          <p class="hint" id="obs-settings-status"></p>
+          <p class="hint" id="design-settings-status"></p>
         </section>
       </section>
     </main>
