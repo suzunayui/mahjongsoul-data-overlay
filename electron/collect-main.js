@@ -679,26 +679,26 @@ async function setupObsOverlaySources(settings) {
     {
       inputName: "MJS Overlay Rank",
       route: "/obs/rank",
-      width: Math.round(580 * sizeScale),
-      height: Math.round(150 * sizeScale)
+      width: Math.round(680 * sizeScale),
+      height: Math.round(200 * sizeScale)
     },
     {
       inputName: "MJS Overlay Points",
       route: "/obs/points",
-      width: Math.round(480 * sizeScale),
-      height: Math.round(210 * sizeScale)
+      width: Math.round(580 * sizeScale),
+      height: Math.round(260 * sizeScale)
     },
     {
       inputName: "MJS Overlay Records",
       route: "/obs/records",
-      width: Math.round(330 * sizeScale),
-      height: Math.round(100 * sizeScale)
+      width: Math.round(430 * sizeScale),
+      height: Math.round(150 * sizeScale)
     },
     {
       inputName: "MJS Overlay Han",
       route: "/obs/han",
-      width: Math.round(200 * sizeScale),
-      height: Math.round(100 * sizeScale)
+      width: Math.round(300 * sizeScale),
+      height: Math.round(150 * sizeScale)
     }
   ];
 
